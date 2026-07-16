@@ -6,7 +6,8 @@ Use this before deploying Vecktrix PMS to production.
 
 - [ ] `DATABASE_URL` points to **dedicated Neon Postgres** (not CMS database)
 - [ ] `AUTH_SECRET` set (32+ byte random, `openssl rand -base64 32`)
-- [ ] `AUTH_URL` set to production domain (e.g. `https://pms.vecktrix.com`)
+- [ ] `AUTH_URL` set to **canonical** production URL (e.g. `https://www.app.vecktrix.com`) — **must not** be `http://localhost:3000` on Vercel
+- [ ] `AUTH_TRUST_HOST` not required if `trustHost: true` in code (already set); still set `AUTH_URL` for OAuth callbacks
 - [ ] `LEAD_INTAKE_SECRET` set and shared with Vecktrix website only
 - [ ] Google OAuth credentials configured (if using Google sign-in)
 - [ ] No `.env` files committed to git
@@ -30,7 +31,8 @@ Use this before deploying Vecktrix PMS to production.
 ## Auth
 
 - [ ] Credentials login works in production
-- [ ] Google OAuth redirect URIs include production domain
+- [ ] Google OAuth redirect URIs include production domain:
+  - `https://www.app.vecktrix.com/api/auth/callback/google` (match your `AUTH_URL` host)
 - [ ] Session cookies secure in production (`NODE_ENV=production`)
 - [ ] Invite tokens expire after 7 days
 

@@ -6,7 +6,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { authConfig } from "./auth.config";
 import { prisma } from "@/lib/prisma";
-
+//temp
 const credentialsSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
