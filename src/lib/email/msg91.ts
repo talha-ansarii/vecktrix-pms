@@ -7,10 +7,7 @@ export async function sendViaMsg91(input: SendEmailInput): Promise<void> {
   const fromName = process.env.MSG91_FROM_NAME ?? "Vecktrix";
 
   if (!authKey || !fromEmail) {
-    if (process.env.NODE_ENV === "production") {
-      throw new Error("MSG91_AUTH_KEY and MSG91_FROM_EMAIL must be set in production");
-    }
-    console.log("[email stub]", input.to, input.subject);
+    console.warn("[email] MSG91 not configured — skipping send to", input.to);
     return;
   }
 

@@ -58,14 +58,21 @@ export async function inviteUser(data: z.infer<typeof inviteSchema>) {
   const baseUrl = process.env.AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const inviteUrl = `${baseUrl.replace(/\/$/, "")}/invite/${token}`;
 
-  await sendEmail({
-    to: parsed.email.trim().toLowerCase(),
-    subject: `Invitation to ${workspace?.name ?? "Vecktrix"} PMS`,
-    html: inviteEmailHtml(inviteUrl, workspace?.name ?? "Vecktrix"),
-  });
+  let emailSent = false;
+  try {
+    await sendEmail({
+      to: parsed.email.trim().toLowerCase(),
+      subject: `Invitation to ${workspace?.name ?? "Vecktrix"} PMS`,
+      html: inviteEmailHtml(inviteUrl, workspace?.name ?? "Vecktrix"),
+    });
+    emailSent = true;
+  } catch (err) {
+    console.error("[inviteUser] email failed:", err);
+    console.info("[inviteUser] manual invite link:", inviteUrl);
+  }
 
   revalidatePath("/settings/team");
-  return invite;
+  return { invite, emailSent, inviteUrl: emailSent ? undefined : inviteUrl };
 }
 
 export async function revokeInvite(inviteId: string) {

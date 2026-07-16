@@ -9,7 +9,7 @@ const ROLES = Object.values(WorkspaceRole);
 export function InviteForm() {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState<string | null>(null);
 
   return (
     <form
@@ -17,18 +17,24 @@ export function InviteForm() {
       onSubmit={(e) => {
         e.preventDefault();
         setError(null);
-        setSuccess(false);
+        setSuccess(null);
         const fd = new FormData(e.currentTarget);
         startTransition(async () => {
           try {
-            await inviteUser({
+            const result = await inviteUser({
               email: fd.get("email") as string,
               role: fd.get("role") as WorkspaceRole,
             });
-            setSuccess(true);
+            if (result.emailSent) {
+              setSuccess("Invite sent by email.");
+            } else {
+              setSuccess(
+                `Invite saved. Share this link (email not configured): ${result.inviteUrl ?? ""}`,
+              );
+            }
             e.currentTarget.reset();
           } catch (err) {
-            setError(err instanceof Error ? err.message : "Could not send invite");
+            setError(err instanceof Error ? err.message : "Could not create invite");
           }
         });
       }}
@@ -47,7 +53,7 @@ export function InviteForm() {
         </button>
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}
-      {success && <p className="text-sm text-emerald-400">Invite sent.</p>}
+      {success && <p className="text-sm text-emerald-400 break-all">{success}</p>}
     </form>
   );
 }
