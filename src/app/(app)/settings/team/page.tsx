@@ -1,13 +1,31 @@
 import { AppShell } from "@/components/AppShell";
-import { PageHeader, EmptyState } from "@/components/ui";
+import { PageHeader, EmptyState, ForbiddenState } from "@/components/ui";
 import { listTeamMembers, listPendingInvites } from "@/lib/actions/users";
 import { formatDate, formatStatus } from "@/lib/utils";
+import {
+  getSessionWithPermissions,
+  roleHasPermission,
+  tryAssertAnyPermission,
+} from "@/lib/rbac";
 import { InviteForm } from "./InviteForm";
 
 export default async function TeamSettingsPage() {
+  const access = await tryAssertAnyPermission(["user:invite", "user:manage"]);
+  if (!access.ok) {
+    return (
+      <AppShell currentPath="/settings/team">
+        <ForbiddenState />
+      </AppShell>
+    );
+  }
+
+  const { permissions, workspaceRole } = await getSessionWithPermissions();
+  const canInvite = roleHasPermission(permissions, "user:invite", workspaceRole);
+  const canManage = roleHasPermission(permissions, "user:manage", workspaceRole);
+
   const [members, invites] = await Promise.all([
-    listTeamMembers().catch(() => []),
-    listPendingInvites().catch(() => []),
+    canManage ? listTeamMembers() : Promise.resolve([]),
+    canInvite ? listPendingInvites() : Promise.resolve([]),
   ]);
 
   return (
@@ -16,13 +34,15 @@ export default async function TeamSettingsPage() {
         overline="Settings"
         title="Team"
         description="Manage workspace members and invites"
-        action={<InviteForm />}
+        action={canInvite ? <InviteForm /> : undefined}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card-dark">
           <h2 className="heading-card text-white text-xl mb-4">Members</h2>
-          {members.length === 0 ? (
+          {!canManage ? (
+            <p className="text-text-darkSecondary text-sm">You don’t have permission to view the member list.</p>
+          ) : members.length === 0 ? (
             <EmptyState title="No members" />
           ) : (
             <ul className="space-y-3">
@@ -41,7 +61,9 @@ export default async function TeamSettingsPage() {
 
         <div className="card-dark">
           <h2 className="heading-card text-white text-xl mb-4">Pending Invites</h2>
-          {invites.length === 0 ? (
+          {!canInvite ? (
+            <p className="text-text-darkSecondary text-sm">You don’t have permission to view invites.</p>
+          ) : invites.length === 0 ? (
             <p className="text-text-darkSecondary text-sm">No pending invites</p>
           ) : (
             <ul className="space-y-3">

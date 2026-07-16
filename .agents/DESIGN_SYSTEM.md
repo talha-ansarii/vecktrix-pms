@@ -48,7 +48,7 @@ PMS UI **inherits** the marketing site. Do not invent a parallel theme.
 
 ## Port checklist (Phase 1)
 
-- [ ] Copy `public/bg.avif`, `public/logo.svg`
-- [ ] Port `@theme` + `@layer components` from index.css
-- [ ] Wire next/font Inter + Newsreader + JetBrains Mono
-- [ ] Style login + app chrome with atmospheric background
+- [x] Copy `public/bg.avif`, `public/logo.svg`
+- [x] Port `@theme` + `@layer components` from index.css
+- [x] Wire next/font Inter + Newsreader + JetBrains Mono
+- [x] Style login + app chrome with atmospheric background

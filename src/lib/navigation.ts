@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { WorkspaceRole } from "@prisma/client";
 import {
   Home,
   Users,
@@ -8,6 +9,15 @@ import {
   UserCog,
   LayoutDashboard,
 } from "lucide-react";
+
+function roleHasPermission(
+  permissions: Set<string>,
+  permission: string,
+  workspaceRole: WorkspaceRole,
+) {
+  if (workspaceRole === "agency_admin") return true;
+  return permissions.has(permission) || permissions.has("*");
+}
 
 export type NavItem = {
   href: string;
@@ -81,4 +91,31 @@ export const projectNavItems = (projectId: string): NavItem[] => [
 
 export function isNavActive(item: NavItem, currentPath: string) {
   return item.match ? item.match(currentPath) : currentPath === item.href;
+}
+
+/** Permission required to show each agency nav item (null = any workspace member). */
+const AGENCY_NAV_PERMISSION: Record<string, string | null> = {
+  "/dashboard": null,
+  "/leads": "lead:read",
+  "/clients": "client:read",
+  "/projects": "project:read",
+  "/reports": "report:read",
+  "/settings/team": "user:invite",
+};
+
+export function filterAgencyNavItems(
+  permissions: Set<string>,
+  workspaceRole: WorkspaceRole,
+): NavItem[] {
+  return agencyNavItems.filter((item) => {
+    const required = AGENCY_NAV_PERMISSION[item.href];
+    if (required === null) return true;
+    if (item.href === "/settings/team") {
+      return (
+        roleHasPermission(permissions, "user:invite", workspaceRole) ||
+        roleHasPermission(permissions, "user:manage", workspaceRole)
+      );
+    }
+    return roleHasPermission(permissions, required, workspaceRole);
+  });
 }

@@ -2,8 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { WorkspaceRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { assertPermission, getSessionContext } from "@/lib/rbac";
+import { assertAgencyAccess, assertPermission, getSessionContext } from "@/lib/rbac";
+import { inviteUser } from "@/lib/actions/users";
 
 const updateClientSchema = z.object({
   id: z.string(),
@@ -15,13 +17,14 @@ const updateClientSchema = z.object({
 });
 
 export async function listClients() {
-  const ctx = await assertPermission("client:read");
+  const ctx = await assertAgencyAccess("client:read");
 
   return prisma.client.findMany({
     where: { workspaceId: ctx.workspaceId },
     include: {
       projects: { select: { id: true, name: true, status: true } },
       _count: { select: { projects: true } },
+      user: { select: { id: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -102,4 +105,20 @@ export async function getClientPortalData() {
   });
 
   return client;
+}
+
+export async function inviteClientToPortal(clientId: string) {
+  await assertAgencyAccess("client:write");
+  const ctx = await getSessionContext();
+
+  const client = await prisma.client.findFirstOrThrow({
+    where: { id: clientId, workspaceId: ctx.workspaceId },
+  });
+
+  if (client.userId) {
+    throw new Error("This client already has portal access.");
+  }
+
+  await inviteUser({ email: client.email, role: WorkspaceRole.client });
+  revalidatePath("/clients");
 }

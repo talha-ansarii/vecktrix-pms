@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { LeadSource, LeadTemperature, ServiceInterest } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { rateLimitOrThrow, clientIpFromHeaders } from "@/lib/rate-limit";
+import { notifyWorkspaceRole } from "@/lib/notifications/events";
+import { sendEmail } from "@/lib/email/send";
 
 const intakeSchema = z.object({
   name: z.string().min(1),
@@ -29,6 +32,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    rateLimitOrThrow(`intake:${clientIpFromHeaders(req.headers)}`);
     const body = await req.json();
     const parsed = intakeSchema.parse(body);
 
@@ -72,8 +76,29 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    await notifyWorkspaceRole({
+      workspaceId: workspace.id,
+      roles: ["sales", "agency_admin"],
+      type: "lead",
+      title: "New website lead",
+      message: `${lead.name} (${lead.email})`,
+      href: "/leads",
+    });
+
+    const salesEmail = process.env.SALES_NOTIFY_EMAIL;
+    if (salesEmail) {
+      await sendEmail({
+        to: salesEmail,
+        subject: `New lead: ${lead.name}`,
+        html: `<p>New website lead: <strong>${lead.name}</strong> (${lead.email})</p>`,
+      });
+    }
+
     return NextResponse.json({ id: lead.id, created: true }, { status: 201 });
   } catch (error) {
+    if (error instanceof Error && error.message === "Rate limit exceeded") {
+      return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+    }
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.flatten() }, { status: 400 });
     }

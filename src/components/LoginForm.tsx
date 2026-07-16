@@ -1,12 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
+
+const URL_ERRORS: Record<string, string> = {
+  NoWorkspaceAccess:
+    "No workspace access for this account. Ask your admin to invite you, then sign in with the same email (Google or password).",
+  AccessDenied: "Sign-in was denied. Use an invited email or contact your admin.",
+};
 
 export function LoginForm() {
+  const searchParams = useSearchParams();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const code = searchParams.get("error");
+    if (code && URL_ERRORS[code]) setError(URL_ERRORS[code]);
+  }, [searchParams]);
 
   async function handleCredentials(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

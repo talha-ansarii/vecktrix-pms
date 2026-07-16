@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { LeadStatus, LeadTemperature, LeadSource, ServiceInterest } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { assertPermission } from "@/lib/rbac";
+import { assertAgencyAccess } from "@/lib/rbac";
 
 const createLeadSchema = z.object({
   name: z.string().min(1),
@@ -24,24 +24,46 @@ const updateLeadSchema = createLeadSchema.partial().extend({
   assignedToId: z.string().nullable().optional(),
 });
 
-export async function listLeads(filters?: { status?: LeadStatus }) {
-  const ctx = await assertPermission("lead:read");
+export async function listLeads(filters?: {
+  status?: LeadStatus;
+  temperature?: LeadTemperature;
+  moneyBucket?: "low" | "mid" | "high";
+  timelineBucket?: "short" | "medium" | "long";
+}) {
+  const ctx = await assertAgencyAccess("lead:read");
 
   return prisma.lead.findMany({
     where: {
       workspaceId: ctx.workspaceId,
       ...(filters?.status ? { status: filters.status } : {}),
+      ...(filters?.temperature ? { temperature: filters.temperature } : {}),
+      ...(filters?.moneyBucket ? { moneyBucket: filters.moneyBucket } : {}),
+      ...(filters?.timelineBucket ? { timelineBucket: filters.timelineBucket } : {}),
     },
     include: {
       assignedTo: { select: { id: true, name: true, email: true } },
-      activities: { orderBy: { createdAt: "desc" }, take: 3 },
+      activities: { orderBy: { createdAt: "desc" }, take: 5 },
     },
     orderBy: { createdAt: "desc" },
   });
 }
 
+export async function getLead(id: string) {
+  const ctx = await assertAgencyAccess("lead:read");
+  return prisma.lead.findFirstOrThrow({
+    where: { id, workspaceId: ctx.workspaceId },
+    include: {
+      assignedTo: { select: { id: true, name: true, email: true } },
+      activities: {
+        orderBy: { createdAt: "desc" },
+        include: { user: { select: { name: true, email: true } } },
+      },
+    },
+  });
+}
+
 export async function createLead(data: z.infer<typeof createLeadSchema>) {
-  const ctx = await assertPermission("lead:write");
+  const ctx = await assertAgencyAccess("lead:write");
   const parsed = createLeadSchema.parse(data);
 
   const lead = await prisma.lead.create({
@@ -66,7 +88,7 @@ export async function createLead(data: z.infer<typeof createLeadSchema>) {
 }
 
 export async function updateLead(data: z.infer<typeof updateLeadSchema>) {
-  const ctx = await assertPermission("lead:write");
+  const ctx = await assertAgencyAccess("lead:write");
   const { id, ...rest } = updateLeadSchema.parse(data);
 
   const lead = await prisma.lead.update({
@@ -88,7 +110,7 @@ export async function updateLead(data: z.infer<typeof updateLeadSchema>) {
 }
 
 export async function convertLeadToClient(leadId: string) {
-  const ctx = await assertPermission("lead:convert");
+  const ctx = await assertAgencyAccess("lead:convert");
 
   const lead = await prisma.lead.findFirstOrThrow({
     where: { id: leadId, workspaceId: ctx.workspaceId },
@@ -124,7 +146,7 @@ export async function convertLeadToClient(leadId: string) {
         leadId,
         userId: ctx.userId,
         type: "converted",
-        content: `Converted to client: ${client.name}`,
+        content: `Converted to client: ${client.name}. Invite them to the portal from the Clients page.`,
       },
     });
 
@@ -137,7 +159,7 @@ export async function convertLeadToClient(leadId: string) {
 }
 
 export async function addLeadActivity(leadId: string, content: string) {
-  const ctx = await assertPermission("lead:write");
+  const ctx = await assertAgencyAccess("lead:write");
 
   const activity = await prisma.leadActivity.create({
     data: {

@@ -8,6 +8,7 @@ import {
   reviewTask,
   toggleClientVisibility,
   addTaskComment,
+  forceUnlockTask,
 } from "@/lib/actions/tasks";
 import { logTimeEntry } from "@/lib/actions/time";
 import { StatusBadge } from "@/components/ui";
@@ -19,6 +20,14 @@ type TaskItem = {
   status: TaskStatus;
   clientVisible: boolean;
   sortOrder: number;
+  forceUnlocked?: boolean;
+  comments?: { id: string; content: string; author: string }[];
+  reviews?: { id: string; status: string; feedback: string | null; round: number }[];
+};
+
+type TaskCaps = {
+  canApprove: boolean;
+  canVisibility: boolean;
 };
 
 export function MilestoneTaskPanel({
@@ -26,15 +35,19 @@ export function MilestoneTaskPanel({
   milestoneId,
   milestoneStatus,
   tasks,
+  caps = { canApprove: true, canVisibility: true },
 }: {
   projectId: string;
   milestoneId: string;
   milestoneStatus: string;
   tasks: TaskItem[];
+  caps?: TaskCaps;
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [commentFor, setCommentFor] = useState<string | null>(null);
+  const [unlockFor, setUnlockFor] = useState<string | null>(null);
+  const [unlockNote, setUnlockNote] = useState("");
 
   const canAddTasks = ["active", "client_changes_requested", "internal_complete"].includes(milestoneStatus);
 
@@ -66,8 +79,28 @@ export function MilestoneTaskPanel({
                 </div>
               </div>
 
+              {(task.comments?.length ?? 0) > 0 && (
+                <ul className="text-xs space-y-1 border-t border-white/6 pt-2">
+                  {task.comments!.map((c) => (
+                    <li key={c.id} className="text-text-darkSecondary">
+                      <span className="text-white">{c.author}:</span> {c.content}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {(task.reviews?.length ?? 0) > 0 && (
+                <ul className="text-xs space-y-1">
+                  {task.reviews!.map((r) => (
+                    <li key={r.id} className="text-text-darkSecondary">
+                      Review r{r.round}: {r.status}
+                      {r.feedback ? ` — ${r.feedback}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
               <div className="flex flex-wrap gap-2">
-                {task.status === "pending_pm_approval" && (
+                {caps.canApprove && task.status === "pending_pm_approval" && (
                   <button
                     type="button"
                     disabled={pending}
@@ -135,6 +168,7 @@ export function MilestoneTaskPanel({
                     Resume work
                   </button>
                 )}
+                {caps.canVisibility && (
                 <button
                   type="button"
                   disabled={pending}
@@ -143,6 +177,16 @@ export function MilestoneTaskPanel({
                 >
                   {task.clientVisible ? "Hide from client" : "Show to client"}
                 </button>
+                )}
+                {caps.canApprove && (
+                  <button
+                    type="button"
+                    className="btn-secondary-dark text-xs px-2 py-1"
+                    onClick={() => setUnlockFor(unlockFor === task.id ? null : task.id)}
+                  >
+                    Force unlock
+                  </button>
+                )}
                 <button
                   type="button"
                   className="btn-secondary-dark text-xs px-2 py-1"
@@ -151,6 +195,31 @@ export function MilestoneTaskPanel({
                   Comment
                 </button>
               </div>
+
+              {unlockFor === task.id && caps.canApprove && (
+                <div className="flex gap-2">
+                  <input
+                    value={unlockNote}
+                    onChange={(e) => setUnlockNote(e.target.value)}
+                    placeholder="Audit note (required)"
+                    className="input-dark flex-1 text-xs"
+                  />
+                  <button
+                    type="button"
+                    disabled={pending || !unlockNote.trim()}
+                    className="btn-primary-dark text-xs px-2 py-1"
+                    onClick={() =>
+                      run(async () => {
+                        await forceUnlockTask(task.id, unlockNote);
+                        setUnlockFor(null);
+                        setUnlockNote("");
+                      })
+                    }
+                  >
+                    Confirm
+                  </button>
+                </div>
+              )}
 
               {commentFor === task.id && (
                 <form

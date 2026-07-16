@@ -1,43 +1,104 @@
 "use client";
 
-import { useTransition } from "react";
-import { submitMilestoneForClientReview, updateMilestoneStatus } from "@/lib/actions/milestones";
+import { useState, useTransition } from "react";
+import {
+  submitMilestoneForClientReview,
+  updateMilestoneStatus,
+  overrideMilestone,
+  updatePaymentStatus,
+} from "@/lib/actions/milestones";
 import type { MilestoneStatus } from "@prisma/client";
 
-export function MilestoneActions({ milestoneId, status }: { milestoneId: string; status: MilestoneStatus }) {
+export function MilestoneActions({
+  milestoneId,
+  status,
+  canManageMilestones,
+  canOverride,
+  canPayment,
+}: {
+  milestoneId: string;
+  status: MilestoneStatus;
+  canManageMilestones: boolean;
+  canOverride: boolean;
+  canPayment: boolean;
+}) {
   const [pending, startTransition] = useTransition();
+  const [overrideNote, setOverrideNote] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState("pending");
+
+  if (!canManageMilestones && !canOverride && !canPayment) return null;
 
   return (
-    <div className="mt-4 flex gap-2 flex-wrap">
-      {status === "internal_complete" && (
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => startTransition(() => { void submitMilestoneForClientReview(milestoneId); })}
-          className="btn-primary-dark text-xs py-1.5 px-3"
-        >
-          Submit for client review
-        </button>
+    <div className="mt-4 space-y-2">
+      <div className="flex gap-2 flex-wrap">
+        {canManageMilestones && status === "internal_complete" && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => startTransition(() => { void submitMilestoneForClientReview(milestoneId); })}
+            className="btn-primary-dark text-xs py-1.5 px-3"
+          >
+            Submit for client review
+          </button>
+        )}
+        {canManageMilestones && status === "active" && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() =>
+              startTransition(() => {
+                void updateMilestoneStatus({ milestoneId, status: "internal_complete" });
+              })
+            }
+            className="btn-secondary-dark text-xs py-1.5 px-3"
+          >
+            Mark internal complete
+          </button>
+        )}
+      </div>
+      {canOverride && (
+        <div className="flex gap-2 flex-wrap items-center">
+          <input
+            value={overrideNote}
+            onChange={(e) => setOverrideNote(e.target.value)}
+            placeholder="Override note"
+            className="input-dark text-xs flex-1 min-w-[120px]"
+          />
+          <button
+            type="button"
+            disabled={pending || !overrideNote.trim()}
+            onClick={() =>
+              startTransition(() => {
+                void overrideMilestone(milestoneId, overrideNote);
+                setOverrideNote("");
+              })
+            }
+            className="btn-secondary-dark text-xs py-1.5 px-3"
+          >
+            PM override → active
+          </button>
+        </div>
       )}
-      {status === "active" && (
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => startTransition(() => { void updateMilestoneStatus({ milestoneId, status: "internal_complete" }); })}
-          className="btn-secondary-dark text-xs py-1.5 px-3"
-        >
-          Mark internal complete
-        </button>
-      )}
-      {status === "client_approved" && (
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => startTransition(() => { void updateMilestoneStatus({ milestoneId, status: "completed" }); })}
-          className="btn-primary-dark text-xs py-1.5 px-3"
-        >
-          Complete milestone
-        </button>
+      {canPayment && (
+        <div className="flex gap-2 flex-wrap items-center">
+          <select
+            value={paymentStatus}
+            onChange={(e) => setPaymentStatus(e.target.value)}
+            className="input-dark text-xs"
+          >
+            <option value="pending">Payment pending</option>
+            <option value="partial">Partial</option>
+            <option value="paid">Paid</option>
+          </select>
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => startTransition(() => { void updatePaymentStatus(milestoneId, paymentStatus); })}
+            className="btn-secondary-dark text-xs py-1.5 px-3"
+          >
+            Update payment
+          </button>
+        </div>
       )}
     </div>
   );

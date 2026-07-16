@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Suspense } from "react";
 import { LoginForm } from "@/components/LoginForm";
 
 export default function LoginPage() {
@@ -10,7 +11,9 @@ export default function LoginPage() {
         <div className="glow-spotlight top-1/4 left-1/2 -translate-x-1/2" />
       </div>
       <div className="relative z-10 w-full flex justify-center">
-        <LoginForm />
+        <Suspense fallback={null}>
+          <LoginForm />
+        </Suspense>
       </div>
     </div>
   );

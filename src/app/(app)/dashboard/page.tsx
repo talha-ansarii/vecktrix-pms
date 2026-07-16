@@ -1,19 +1,33 @@
 import { AppShell } from "@/components/AppShell";
-import { PageHeader, StatCard } from "@/components/ui";
+import { PageHeader, StatCard, ForbiddenState } from "@/components/ui";
 import { listLeads } from "@/lib/actions/leads";
 import { listProjects } from "@/lib/actions/projects";
 import { listClients } from "@/lib/actions/clients";
 import { listNotifications, getUnreadCount } from "@/lib/actions/notifications";
+import { getSessionWithPermissions, roleHasPermission, tryAssertPermission } from "@/lib/rbac";
 import { formatDate } from "@/lib/utils";
 import Link from "next/link";
 
 export default async function DashboardPage() {
+  const access = await tryAssertPermission("lead:read");
+  if (!access.ok) {
+    return (
+      <AppShell currentPath="/dashboard">
+        <ForbiddenState title="Welcome" description="Your role does not include dashboard metrics." />
+      </AppShell>
+    );
+  }
+
+  const { permissions, workspaceRole } = await getSessionWithPermissions();
+  const canProjects = roleHasPermission(permissions, "project:read", workspaceRole);
+  const canClients = roleHasPermission(permissions, "client:read", workspaceRole);
+
   const [leads, projects, clients, notifications, unread] = await Promise.all([
-    listLeads().catch(() => []),
-    listProjects().catch(() => []),
-    listClients().catch(() => []),
-    listNotifications().catch(() => []),
-    getUnreadCount().catch(() => 0),
+    listLeads(),
+    canProjects ? listProjects() : Promise.resolve([]),
+    canClients ? listClients() : Promise.resolve([]),
+    listNotifications(),
+    getUnreadCount(),
   ]);
 
   const newLeads = leads.filter((l) => l.status === "new").length;
@@ -29,8 +43,10 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatCard label="New Leads" value={newLeads} sub={`${leads.length} total`} />
-        <StatCard label="Active Projects" value={activeProjects} sub={`${projects.length} total`} />
-        <StatCard label="Clients" value={clients.length} />
+        {canProjects && (
+          <StatCard label="Active Projects" value={activeProjects} sub={`${projects.length} total`} />
+        )}
+        {canClients && <StatCard label="Clients" value={clients.length} />}
         <StatCard label="Notifications" value={unread} sub="unread" />
       </div>
 

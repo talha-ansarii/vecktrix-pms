@@ -1,11 +1,21 @@
 import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { PageHeader, StatusBadge, EmptyState } from "@/components/ui";
+import { PageHeader, StatusBadge, EmptyState, ForbiddenState } from "@/components/ui";
 import { listProjects } from "@/lib/actions/projects";
+import { tryAssertPermission } from "@/lib/rbac";
 import { formatDate } from "@/lib/utils";
 
 export default async function ProjectsPage() {
-  const projects = await listProjects().catch(() => []);
+  const access = await tryAssertPermission("project:read");
+  if (!access.ok) {
+    return (
+      <AppShell currentPath="/projects">
+        <ForbiddenState />
+      </AppShell>
+    );
+  }
+
+  const projects = await listProjects();
 
   return (
     <AppShell currentPath="/projects">

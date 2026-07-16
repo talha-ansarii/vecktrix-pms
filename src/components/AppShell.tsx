@@ -1,7 +1,14 @@
 import { auth } from "@/auth";
-import { getSessionContext } from "@/lib/rbac";
+import {
+  getSessionContext,
+  getUserPermissions,
+  roleHasPermission,
+} from "@/lib/rbac";
 import { listProjects } from "@/lib/actions/projects";
+import { filterAgencyNavItems } from "@/lib/navigation";
 import { SidebarShell } from "@/components/shell/SidebarShell";
+import type { NavItem } from "@/lib/navigation";
+import type { WorkspaceRole } from "@prisma/client";
 
 export async function AppShell({
   children,
@@ -21,16 +28,27 @@ export async function AppShell({
   };
 
   let workspaceName = "Vecktrix Agency";
+  let agencyNav: NavItem[] | undefined;
+  let showProjectSwitcher = false;
+
   try {
     const ctx = await getSessionContext();
     workspaceName = ctx.workspace.name;
+    const permissions = await getUserPermissions(ctx.userId, ctx.workspaceId);
+    agencyNav = filterAgencyNavItems(permissions, ctx.workspaceRole);
+    showProjectSwitcher = roleHasPermission(
+      permissions,
+      "project:read",
+      ctx.workspaceRole as WorkspaceRole,
+    );
   } catch {
     // unauthenticated pages should not use AppShell
   }
 
-  const projects = isClient
-    ? []
-    : await listProjects().catch(() => []);
+  const projects =
+    isClient || !showProjectSwitcher
+      ? []
+      : await listProjects().catch(() => []);
 
   return (
     <SidebarShell
@@ -44,6 +62,8 @@ export async function AppShell({
         name: p.name,
         client: p.client,
       }))}
+      agencyNavItems={agencyNav}
+      showProjectSwitcher={showProjectSwitcher}
     >
       {children}
     </SidebarShell>

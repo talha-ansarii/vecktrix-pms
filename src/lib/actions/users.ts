@@ -6,6 +6,8 @@ import { z } from "zod";
 import { WorkspaceRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { assertPermission } from "@/lib/rbac";
+import { sendEmail, inviteEmailHtml } from "@/lib/email/send";
+import { linkClientPortalUser } from "@/lib/auth/client-link";
 
 const inviteSchema = z.object({
   email: z.string().email(),
@@ -43,7 +45,7 @@ export async function inviteUser(data: z.infer<typeof inviteSchema>) {
 
   const invite = await prisma.invite.create({
     data: {
-      email: parsed.email,
+      email: parsed.email.trim().toLowerCase(),
       workspaceId: ctx.workspaceId,
       role: parsed.role,
       token,
@@ -52,8 +54,15 @@ export async function inviteUser(data: z.infer<typeof inviteSchema>) {
     },
   });
 
-  // Email stub — log for now (Msg91 later)
-  console.log(`[Invite] ${parsed.email} → /invite/${token}`);
+  const workspace = await prisma.workspace.findUnique({ where: { id: ctx.workspaceId } });
+  const baseUrl = process.env.AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const inviteUrl = `${baseUrl.replace(/\/$/, "")}/invite/${token}`;
+
+  await sendEmail({
+    to: parsed.email.trim().toLowerCase(),
+    subject: `Invitation to ${workspace?.name ?? "Vecktrix"} PMS`,
+    html: inviteEmailHtml(inviteUrl, workspace?.name ?? "Vecktrix"),
+  });
 
   revalidatePath("/settings/team");
   return invite;
@@ -140,6 +149,13 @@ export async function acceptInvite(data: z.infer<typeof acceptInviteSchema>) {
     await tx.invite.update({
       where: { id: invite.id },
       data: { status: "accepted", acceptedAt: new Date() },
+    });
+
+    await linkClientPortalUser(tx, {
+      userId: u.id,
+      workspaceId: invite.workspaceId,
+      email: invite.email,
+      role: invite.role,
     });
 
     return u;

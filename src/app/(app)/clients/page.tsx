@@ -4,9 +4,21 @@ import { PageHeader, StatusBadge, EmptyState } from "@/components/ui";
 import { listClients } from "@/lib/actions/clients";
 import { formatDate } from "@/lib/utils";
 import { CreateProjectForm } from "./CreateProjectForm";
+import { ClientPortalInviteButton } from "./ClientPortalInviteButton";
+import { tryAssertPermission } from "@/lib/rbac";
+import { ForbiddenState } from "@/components/ui";
 
 export default async function ClientsPage() {
-  const clients = await listClients().catch(() => []);
+  const access = await tryAssertPermission("client:read");
+  if (!access.ok) {
+    return (
+      <AppShell currentPath="/clients">
+        <ForbiddenState />
+      </AppShell>
+    );
+  }
+
+  const clients = await listClients();
 
   return (
     <AppShell currentPath="/clients">
@@ -46,6 +58,7 @@ export default async function ClientsPage() {
                 </div>
               )}
               <CreateProjectForm clientId={client.id} clientName={client.name} />
+              <ClientPortalInviteButton clientId={client.id} hasPortalAccess={Boolean(client.userId)} />
             </div>
           ))}
         </div>

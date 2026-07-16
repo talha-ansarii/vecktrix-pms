@@ -1,63 +1,25 @@
-# Session Handoff
+# Session handoff
 
-## Last updated
+## Latest: PRD acceptance remediation (complete)
 
-2026-07-17 — Post-scaffold polish complete; production build passes.
+### PMS (`Vecktrix-PMS`)
+- **RBAC:** Client role trimmed in seed; `assertAgencyAccess` on agency actions; permission-based nav/UI caps.
+- **Portal:** `linkClientPortalUser` on invite accept + Google provision; `client` in invite roles; **Invite to portal** on Clients.
+- **Delivery:** Sequential task rules in `transitionTask`/`approveTask`; milestone validation; auto-complete after client approval; PM override + payment UI; project members UI; task comments/reviews in panel.
+- **Sales:** Lead filters, create, detail + activity log (`/leads/[id]`).
+- **Email:** Msg91 via `src/lib/email/` (invites, milestone review, optional `SALES_NOTIFY_EMAIL`).
+- **Notifications:** `lib/notifications/events.ts` wired to intake, tasks, milestones.
+- **Rate limits:** Intake + email-intake APIs; CMS proxy has its own limiter.
+- **E2E:** Playwright `e2e/smoke.spec.ts`, `npm run test:e2e`.
+- **Docs:** `.agents/PRD_ACCEPTANCE.md`, `.env.example`, checklist updates.
 
-## Completed this session
+### CMS (`Vecktrix`)
+- `POST /api/pms-lead-intake` → PMS intake with server-only secret.
+- Contact form calls PMS intake first, then EmailJS/Sheets.
 
-- Fixed TypeScript/build errors across invite page, MilestoneTaskPanel, acceptInvite, clients page, and project page
-- Create-project UI form on clients page (`CreateProjectForm.tsx`)
-- Task creation UI on project detail (`MilestoneTaskPanel.tsx`)
-- Time entry UI on project detail (MilestoneTaskPanel + time actions)
-- Invite acceptance flow at `/invite/[token]` (`AcceptInviteForm.tsx`)
-- Verified `npm run build` passes with zero errors
-- Updated IMPLEMENTATION_TODO, PHASES, and PRODUCTION_CHECKLIST
+### Deploy env (add)
+- PMS: `MSG91_AUTH_KEY`, `MSG91_FROM_EMAIL`, optional `SALES_NOTIFY_EMAIL`
+- CMS: `PMS_INTAKE_URL`, `LEAD_INTAKE_SECRET`
 
-## In progress
-
-- None
-
-## Next steps
-
-1. Set `DATABASE_URL` in `.env` and run `npm run db:push && npm run db:seed`
-2. Wire Msg91 email notifications
-3. Add Vercel Blob file uploads
-4. Connect Vecktrix website contact form to intake API
-5. Add E2E test suite
-
-## Blockers
-
-- Neon `DATABASE_URL` must be provided by user for live DB
-
-## How to run
-
-```bash
-# Install dependencies
-npm install
-
-# Configure environment
-cp .env.example .env
-# Edit .env with Neon DATABASE_URL, AUTH_SECRET, and optional Google OAuth keys
-
-# Push schema and seed
-npm run db:push
-npm run db:seed
-
-# Development
-npm run dev
-
-# Production build (verified passing)
-npm run build
-npm run start
-```
-
-Open [http://localhost:3000](http://localhost:3000) and sign in with:
-
-- **Email:** `vecktrixai@gmail.com`
-- **Password:** `Admin123!`
-
-## Default credentials
-
-- Email: `vecktrixai@gmail.com`
-- Password: `Admin123!`
+### Post-deploy
+- Run `npm run db:seed` on production once to refresh client role permissions.

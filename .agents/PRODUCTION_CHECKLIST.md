@@ -38,10 +38,10 @@ Use this before deploying Vecktrix PMS to production.
 
 ## Integrations
 
-- [ ] Vecktrix website contact form → `POST /api/leads/intake`
+- [ ] Vecktrix website contact form → `POST /api/leads/intake` (CMS: `PMS_INTAKE_URL` + `LEAD_INTAKE_SECRET`)
 - [ ] Email intake webhook configured (if using)
-- [ ] Msg91 email notifications (when enabled)
-- [ ] Vercel Blob for file uploads (when enabled)
+- [x] Msg91 email (`MSG91_AUTH_KEY`, `MSG91_FROM_EMAIL`) — invites + milestone review
+- [x] Vercel Blob for file uploads (when `BLOB_READ_WRITE_TOKEN` set)
 
 ## Monitoring
 

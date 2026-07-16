@@ -63,6 +63,21 @@ export function EmptyState({ title, description }: { title: string; description?
   );
 }
 
+export function ForbiddenState({
+  title = "You don’t have access",
+  description = "Your role doesn’t include permission to view this page. Contact your workspace admin if you need access.",
+}: {
+  title?: string;
+  description?: string;
+}) {
+  return (
+    <div className="card-dark text-center py-16 max-w-lg mx-auto">
+      <p className="heading-card text-white mb-2">{title}</p>
+      <p className="body-text text-text-darkSecondary">{description}</p>
+    </div>
+  );
+}
+
 export function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
     <div className="card-dark">

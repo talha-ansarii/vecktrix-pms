@@ -117,9 +117,59 @@ export function isClientRole(role: WorkspaceRole) {
   return role === "client";
 }
 
-// Clients must never review or comment on tasks
+export function roleHasPermission(
+  permissions: Set<string>,
+  permission: string,
+  workspaceRole: WorkspaceRole,
+) {
+  if (workspaceRole === "agency_admin") return true;
+  return permissions.has(permission) || permissions.has("*");
+}
+
+export async function getSessionWithPermissions() {
+  const ctx = await getSessionContext();
+  const permissions = await getUserPermissions(ctx.userId, ctx.workspaceId);
+  return { ...ctx, permissions };
+}
+
+export async function tryAssertPermission(permission: string) {
+  try {
+    const ctx = await assertPermission(permission);
+    return { ok: true as const, ctx };
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { ok: false as const, reason: "forbidden" as const };
+    throw e;
+  }
+}
+
+export async function tryAssertAnyPermission(permissions: string[]) {
+  try {
+    const ctx = await assertAnyPermission(permissions);
+    return { ok: true as const, ctx };
+  } catch (e) {
+    if (e instanceof ForbiddenError) return { ok: false as const, reason: "forbidden" as const };
+    throw e;
+  }
+}
+
 export function assertNotClientForTaskReview(role: WorkspaceRole) {
   if (role === "client") {
     throw new ForbiddenError("Clients cannot review tasks");
   }
+}
+
+export async function assertAgencyAccess(permission: string) {
+  const ctx = await assertPermission(permission);
+  if (isClientRole(ctx.workspaceRole)) {
+    throw new ForbiddenError("Clients cannot access agency resources");
+  }
+  return ctx;
+}
+
+export async function getClientLinkedRecord(ctx: { userId: string; workspaceId: string }) {
+  const client = await prisma.client.findFirst({
+    where: { userId: ctx.userId, workspaceId: ctx.workspaceId },
+  });
+  if (!client) throw new ForbiddenError("No client profile linked");
+  return client;
 }

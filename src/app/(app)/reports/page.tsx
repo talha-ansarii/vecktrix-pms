@@ -1,14 +1,24 @@
 import { AppShell } from "@/components/AppShell";
-import { PageHeader, StatCard } from "@/components/ui";
+import { PageHeader, StatCard, ForbiddenState } from "@/components/ui";
 import { getTimeReportSummary } from "@/lib/actions/time";
 import { listProjects } from "@/lib/actions/projects";
 import { listLeads } from "@/lib/actions/leads";
+import { tryAssertPermission } from "@/lib/rbac";
 
 export default async function ReportsPage() {
+  const access = await tryAssertPermission("report:read");
+  if (!access.ok) {
+    return (
+      <AppShell currentPath="/reports">
+        <ForbiddenState />
+      </AppShell>
+    );
+  }
+
   const [timeSummary, projects, leads] = await Promise.all([
-    getTimeReportSummary().catch(() => []),
-    listProjects().catch(() => []),
-    listLeads().catch(() => []),
+    getTimeReportSummary(),
+    listProjects(),
+    listLeads(),
   ]);
 
   const totalHours = timeSummary.reduce((sum, r) => sum + r.totalHours, 0);

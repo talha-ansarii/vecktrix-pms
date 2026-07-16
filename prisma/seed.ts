@@ -41,12 +41,12 @@ const ROLE_PERMISSIONS: Record<string, string[] | "*"> = {
     "project:read", "project:write", "project:member_manage",
     "milestone:read", "milestone:write", "milestone:submit_client", "milestone:override",
     "task:read", "task:create", "task:approve", "task:update", "task:review", "task:comment", "task:visibility",
-    "client:read", "time:read", "time:write", "report:read",
+    "client:read", "time:read", "time:write", "report:read", "payment:write",
   ],
   ux_designer: ["task:read", "task:create", "task:update", "task:review", "time:read", "time:write", "milestone:read", "project:read"],
   product_engineer: ["task:read", "task:create", "task:update", "task:review", "time:read", "time:write", "milestone:read", "project:read"],
   qa_engineer: ["task:read", "task:create", "task:update", "task:review", "time:read", "time:write", "milestone:read", "project:read"],
-  client: ["portal:read", "client:self_update", "milestone:client_review", "milestone:read", "project:read", "task:read"],
+  client: ["portal:read", "client:self_update", "milestone:client_review"],
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -95,6 +95,9 @@ async function main() {
     });
 
     const keys = perms === "*" ? allPermissions.map((p) => p.key) : perms;
+    const allowedIds = new Set(
+      keys.map((key) => permMap[key]).filter((id): id is string => Boolean(id)),
+    );
     for (const key of keys) {
       const permissionId = permMap[key];
       if (!permissionId) continue;
@@ -104,6 +107,10 @@ async function main() {
         create: { roleId: role.id, permissionId },
       });
     }
+    // Drop permissions removed from role definition (e.g. client role tightening)
+    await prisma.rolePermission.deleteMany({
+      where: { roleId: role.id, permissionId: { notIn: [...allowedIds] } },
+    });
   }
 
   const ADMIN_EMAIL = "vecktrixai@gmail.com";

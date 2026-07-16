@@ -36,6 +36,8 @@ export type SidebarShellProps = {
   user: { name?: string | null; email?: string | null };
   workspaceName: string;
   projects: ProjectOption[];
+  agencyNavItems?: NavItem[];
+  showProjectSwitcher?: boolean;
 };
 
 type SidebarContentProps = Omit<SidebarShellProps, "children"> & {
@@ -325,15 +327,27 @@ function AccountMenu({
 }
 
 function SidebarContent(props: SidebarContentProps) {
-  const { isClient, currentPath, currentProject, user, workspaceName, projects, collapsed, onNavigate, onOpenSearch } =
-    props;
-  const agencyItems = isClient ? clientNavItems : agencyNavItems;
-  const projectItems = currentProject && !isClient ? projectNavItems(currentProject.id) : [];
+  const {
+    isClient,
+    currentPath,
+    currentProject,
+    user,
+    workspaceName,
+    projects,
+    collapsed,
+    onNavigate,
+    onOpenSearch,
+    agencyNavItems: agencyNavOverride,
+    showProjectSwitcher = true,
+  } = props;
+  const agencyItems = isClient ? clientNavItems : (agencyNavOverride ?? agencyNavItems);
+  const projectItems =
+    currentProject && !isClient && showProjectSwitcher ? projectNavItems(currentProject.id) : [];
 
   return (
     <div className="flex flex-1 flex-col min-h-0">
       <div className={cn("flex items-center gap-2 p-3 border-b border-white/6", collapsed && "flex-col")}>
-        {!isClient && (
+        {!isClient && showProjectSwitcher && (
           <ProjectSwitcher projects={projects} currentProject={currentProject} collapsed={collapsed} />
         )}
         {isClient && !collapsed && (
@@ -398,6 +412,8 @@ export function SidebarShell({
   user,
   workspaceName,
   projects,
+  agencyNavItems: agencyNavOverride,
+  showProjectSwitcher = true,
 }: SidebarShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -424,7 +440,7 @@ export function SidebarShell({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const navItems = isClient ? clientNavItems : agencyNavItems;
+  const navItems = isClient ? clientNavItems : (agencyNavOverride ?? agencyNavItems);
 
   const sidebarInner = (
     <SidebarContent
@@ -437,6 +453,8 @@ export function SidebarShell({
       collapsed={collapsed}
       onNavigate={() => setMobileOpen(false)}
       onOpenSearch={() => setSearchOpen(true)}
+      agencyNavItems={agencyNavOverride}
+      showProjectSwitcher={showProjectSwitcher}
     />
   );
 

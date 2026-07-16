@@ -1,11 +1,36 @@
+import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { PageHeader, StatusBadge, EmptyState } from "@/components/ui";
+import { PageHeader, StatusBadge, EmptyState, ForbiddenState } from "@/components/ui";
 import { listLeads } from "@/lib/actions/leads";
+import { tryAssertPermission } from "@/lib/rbac";
 import { formatDate } from "@/lib/utils";
 import { ConvertLeadButton } from "./ConvertLeadButton";
+import { CreateLeadForm } from "./CreateLeadForm";
+import { LeadsFilters } from "./LeadsFilters";
+import { Suspense } from "react";
+import type { LeadStatus, LeadTemperature } from "@prisma/client";
 
-export default async function LeadsPage() {
-  const leads = await listLeads().catch(() => []);
+export default async function LeadsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const access = await tryAssertPermission("lead:read");
+  if (!access.ok) {
+    return (
+      <AppShell currentPath="/leads">
+        <ForbiddenState />
+      </AppShell>
+    );
+  }
+
+  const sp = await searchParams;
+  const leads = await listLeads({
+    status: sp.status as LeadStatus | undefined,
+    temperature: sp.temperature as LeadTemperature | undefined,
+    moneyBucket: sp.money as "low" | "mid" | "high" | undefined,
+    timelineBucket: sp.timeline as "short" | "medium" | "long" | undefined,
+  });
 
   return (
     <AppShell currentPath="/leads">
@@ -13,10 +38,15 @@ export default async function LeadsPage() {
         overline="Sales"
         title="Leads"
         description="Pipeline and prospect management"
+        action={<CreateLeadForm />}
       />
 
+      <Suspense fallback={null}>
+        <LeadsFilters />
+      </Suspense>
+
       {leads.length === 0 ? (
-        <EmptyState title="No leads yet" description="Leads from the website intake API will appear here." />
+        <EmptyState title="No leads yet" description="Create a lead or wait for website intake." />
       ) : (
         <div className="card-dark overflow-x-auto">
           <table className="w-full text-sm">
@@ -26,6 +56,8 @@ export default async function LeadsPage() {
                 <th className="pb-3 font-medium">Company</th>
                 <th className="pb-3 font-medium">Status</th>
                 <th className="pb-3 font-medium">Temp</th>
+                <th className="pb-3 font-medium">Money</th>
+                <th className="pb-3 font-medium">Timeline</th>
                 <th className="pb-3 font-medium">Source</th>
                 <th className="pb-3 font-medium">Created</th>
                 <th className="pb-3 font-medium"></th>
@@ -35,12 +67,16 @@ export default async function LeadsPage() {
               {leads.map((lead) => (
                 <tr key={lead.id} className="border-b border-white/6 last:border-0">
                   <td className="py-3">
-                    <p className="text-white font-medium">{lead.name}</p>
+                    <Link href={`/leads/${lead.id}`} className="text-white font-medium hover:underline">
+                      {lead.name}
+                    </Link>
                     <p className="text-text-darkSecondary text-xs">{lead.email}</p>
                   </td>
                   <td className="py-3 text-text-darkSecondary">{lead.company ?? "—"}</td>
                   <td className="py-3"><StatusBadge status={lead.status} /></td>
                   <td className="py-3"><StatusBadge status={lead.temperature} /></td>
+                  <td className="py-3 text-text-darkSecondary">{lead.moneyBucket ?? "—"}</td>
+                  <td className="py-3 text-text-darkSecondary">{lead.timelineBucket ?? "—"}</td>
                   <td className="py-3 text-text-darkSecondary">{lead.source}</td>
                   <td className="py-3 text-text-darkSecondary">{formatDate(lead.createdAt)}</td>
                   <td className="py-3">

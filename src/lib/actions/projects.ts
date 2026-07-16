@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { WorkspaceRole, ProjectStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { assertPermission } from "@/lib/rbac";
+import { assertAgencyAccess } from "@/lib/rbac";
 import { DEFAULT_MILESTONES } from "@/lib/services/milestones";
 
 const createProjectSchema = z.object({
@@ -21,7 +21,7 @@ const addMemberSchema = z.object({
 });
 
 export async function listProjects() {
-  const ctx = await assertPermission("project:read");
+  const ctx = await assertAgencyAccess("project:read");
 
   return prisma.project.findMany({
     where: { workspaceId: ctx.workspaceId },
@@ -34,7 +34,7 @@ export async function listProjects() {
 }
 
 export async function getProject(id: string) {
-  const ctx = await assertPermission("project:read");
+  const ctx = await assertAgencyAccess("project:read");
 
   return prisma.project.findFirstOrThrow({
     where: { id, workspaceId: ctx.workspaceId },
@@ -44,7 +44,16 @@ export async function getProject(id: string) {
       milestones: {
         orderBy: { sortOrder: "asc" },
         include: {
-          tasks: { orderBy: { sortOrder: "asc" } },
+          tasks: {
+            orderBy: { sortOrder: "asc" },
+            include: {
+              comments: {
+                orderBy: { createdAt: "asc" },
+                include: { user: { select: { name: true, email: true } } },
+              },
+              reviews: { orderBy: { createdAt: "desc" } },
+            },
+          },
           reviews: { orderBy: { createdAt: "desc" }, take: 1 },
         },
       },
@@ -60,7 +69,7 @@ export async function getProject(id: string) {
 }
 
 export async function createProject(data: z.infer<typeof createProjectSchema>) {
-  const ctx = await assertPermission("project:write");
+  const ctx = await assertAgencyAccess("project:write");
   const parsed = createProjectSchema.parse(data);
 
   const project = await prisma.$transaction(async (tx) => {
@@ -106,7 +115,7 @@ export async function createProject(data: z.infer<typeof createProjectSchema>) {
 }
 
 export async function addProjectMember(data: z.infer<typeof addMemberSchema>) {
-  const ctx = await assertPermission("project:member_manage");
+  const ctx = await assertAgencyAccess("project:member_manage");
   const parsed = addMemberSchema.parse(data);
 
   const project = await prisma.project.findFirstOrThrow({
@@ -127,8 +136,20 @@ export async function addProjectMember(data: z.infer<typeof addMemberSchema>) {
   return member;
 }
 
+export async function listAssignableMembers() {
+  const ctx = await assertAgencyAccess("project:member_manage");
+  return prisma.workspaceMember.findMany({
+    where: {
+      workspaceId: ctx.workspaceId,
+      role: { not: "client" },
+    },
+    include: { user: { select: { id: true, name: true, email: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
 export async function updateProjectStatus(projectId: string, status: ProjectStatus) {
-  const ctx = await assertPermission("project:write");
+  const ctx = await assertAgencyAccess("project:write");
 
   const project = await prisma.project.update({
     where: { id: projectId, workspaceId: ctx.workspaceId },

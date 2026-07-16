@@ -47,6 +47,6 @@
 - [x] Task creation UI on project detail
 - [x] Time entry UI on project detail
 - [x] Invite acceptance flow (`/invite/[token]`)
-- [ ] Msg91 email integration
-- [ ] Vercel Blob file uploads
-- [ ] E2E test suite
+- [x] Msg91 email integration
+- [x] Vercel Blob file uploads
+- [x] E2E test suite

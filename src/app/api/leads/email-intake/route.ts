@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { LeadSource, LeadTemperature } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { rateLimitOrThrow, clientIpFromHeaders } from "@/lib/rate-limit";
 
 const emailIntakeSchema = z.object({
   from: z.string().email(),
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    rateLimitOrThrow(`email-intake:${clientIpFromHeaders(req.headers)}`);
     const body = await req.json();
     const parsed = emailIntakeSchema.parse(body);
 
