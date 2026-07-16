@@ -1,0 +1,171 @@
+@import "tailwindcss";
+
+/* ─── Font variables (resolved at runtime via next/font) ─── */
+@theme inline {
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-serif: var(--font-newsreader), Georgia, serif;
+  --font-mono: var(--font-jetbrains-mono), monospace;
+}
+
+/* ─── Static theme tokens ─── */
+@theme {
+  --color-bg-dark: #030914;
+  --color-bg-light: #f4f4f5;
+  --color-bg-cardDark: #050b18;
+  --color-bg-cardLight: #ececec;
+
+  --color-border-dark: #ffffff0f;
+  --color-border-light: #0000000f;
+  --color-border-accent: #102e65;
+
+  --color-text-darkPrimary: #ffffff;
+  --color-text-darkSecondary: #94a3b8;
+  --color-text-lightPrimary: #09090b;
+  --color-text-lightSecondary: #3f3f46;
+
+  --color-accent-blue: #102e65;
+  --color-accent-glow: #0b1d3d;
+
+  --animate-fade-up: fadeUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-fade-in: fadeIn 0.6s ease-out forwards;
+  --animate-ticker: ticker 30s linear infinite;
+}
+
+@keyframes fadeUp {
+  0% { opacity: 0; transform: translateY(20px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* ─── Base ─── */
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+
+  body {
+    background-color: #030914;
+    color: #ffffff;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background-color: #102e65;
+    color: #ffffff;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background-color: #030914;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #94a3b8;
+  }
+}
+
+/* ─── Components ─── */
+@layer components {
+  .container-base {
+    @apply max-w-7xl mx-auto px-6 lg:px-12 relative;
+  }
+
+  .grid-bg-dark {
+    @apply relative;
+  }
+  .grid-bg-dark::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    max-width: 80rem;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+    pointer-events: none;
+  }
+  @media (min-width: 1024px) {
+    .grid-bg-dark::before {
+      padding-left: 3rem;
+      padding-right: 3rem;
+    }
+  }
+
+  .heading-section {
+    @apply font-serif text-4xl md:text-5xl lg:text-[54px] leading-[1.1] tracking-[-0.02em] font-medium;
+  }
+
+  .heading-card {
+    @apply font-serif text-2xl md:text-3xl leading-[1.2] tracking-[-0.01em] font-medium;
+  }
+
+  .overline-text {
+    @apply font-sans text-[12px] md:text-[14px] font-semibold uppercase tracking-[0.08em];
+  }
+
+  .body-text {
+    @apply font-sans text-[15px] md:text-[16px] leading-[1.6];
+  }
+
+  .btn-primary-dark {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 rounded-[4px] font-sans font-semibold text-[15px] bg-white text-black transition-transform duration-200 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary-dark {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 rounded-[4px] font-sans font-medium text-[15px] bg-transparent text-white border border-white/20 transition-all duration-200 hover:bg-white/5 disabled:opacity-50;
+  }
+
+  .card-dark {
+    background-color: #050b18;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    @apply p-6 md:p-8 transition-all duration-300 hover:border-white/20;
+  }
+
+  .input-dark {
+    @apply w-full px-4 py-2.5 rounded-[4px] bg-white/5 border border-white/10 text-white placeholder:text-text-darkSecondary focus:outline-none focus:border-white/30 transition-colors;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-[4px] text-xs font-medium uppercase tracking-wide;
+  }
+}
+
+@utility glow-spotlight {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 9999px;
+  filter: blur(100px);
+  opacity: 0.6;
+  pointer-events: none;
+  background-color: #0b1d3d;
+}

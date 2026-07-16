@@ -1,0 +1,511 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum LeadStatus {
+  new
+  contacted
+  qualified
+  proposal
+  won
+  lost
+  archived
+}
+
+enum LeadTemperature {
+  hot
+  warm
+  cold
+}
+
+enum MoneyBucket {
+  low
+  mid
+  high
+}
+
+enum TimelineBucket {
+  short
+  medium
+  long
+}
+
+enum LeadSource {
+  manual
+  website
+  email
+  other
+}
+
+enum ServiceInterest {
+  Website
+  Automation
+  RAG
+  SaaS_MVP
+  Extension
+  Other
+}
+
+enum MilestoneStatus {
+  locked
+  active
+  internal_complete
+  awaiting_client_review
+  client_approved
+  client_changes_requested
+  completed
+  blocked
+}
+
+enum TaskStatus {
+  draft
+  pending_pm_approval
+  todo
+  in_progress
+  in_review
+  changes_requested
+  approved
+  done
+  blocked
+  cancelled
+}
+
+enum WorkspaceRole {
+  agency_admin
+  sales
+  project_manager
+  ux_designer
+  product_engineer
+  qa_engineer
+  client
+}
+
+enum ProjectStatus {
+  planning
+  active
+  on_hold
+  completed
+  cancelled
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  expired
+  revoked
+}
+
+enum NotificationType {
+  lead
+  project
+  milestone
+  task
+  invite
+  system
+}
+
+// ─── Workspace & Auth ────────────────────────────────────────────────────────
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members       WorkspaceMember[]
+  roles         Role[]
+  userRoles     UserRole[]
+  invites       Invite[]
+  leads         Lead[]
+  clients       Client[]
+  projects      Project[]
+  notifications Notification[]
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  hashedPassword String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts          Account[]
+  sessions          Session[]
+  workspaceMembers  WorkspaceMember[]
+  userRoles         UserRole[]
+  invitesSent       Invite[]          @relation("InvitedBy")
+  leadsAssigned     Lead[]            @relation("LeadAssignee")
+  leadActivities    LeadActivity[]
+  clients           Client[]
+  projectMembers    ProjectMember[]
+  tasksAssigned     Task[]            @relation("TaskAssignee")
+  tasksCreated      Task[]            @relation("TaskCreator")
+  taskReviews       TaskReview[]
+  taskComments      TaskComment[]
+  milestoneReviews  MilestoneReview[]
+  timeEntries       TimeEntry[]
+  notifications     Notification[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── RBAC ───────────────────────────────────────────────────────────────────
+
+model WorkspaceMember {
+  id          String        @id @default(cuid())
+  userId      String
+  workspaceId String
+  role        WorkspaceRole
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workspaceId])
+  @@index([workspaceId])
+}
+
+model Role {
+  id          String  @id @default(cuid())
+  workspaceId String
+  name        String
+  slug        String
+  description String?
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@unique([workspaceId, slug])
+}
+
+model Permission {
+  id          String @id @default(cuid())
+  key         String @unique
+  description String?
+
+  rolePermissions RolePermission[]
+}
+
+model UserRole {
+  id          String @id @default(cuid())
+  userId      String
+  roleId      String
+  workspaceId String
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId, workspaceId])
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model Invite {
+  id          String        @id @default(cuid())
+  email       String
+  workspaceId String
+  role        WorkspaceRole
+  token       String        @unique
+  status      InviteStatus  @default(pending)
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  invitedById String
+  createdAt   DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation("InvitedBy", fields: [invitedById], references: [id])
+
+  @@index([email, workspaceId])
+}
+
+// ─── Leads ────────────────────────────────────────────────────────────────────
+
+model Lead {
+  id                String           @id @default(cuid())
+  workspaceId       String
+  name              String
+  email             String
+  phone             String?
+  company           String?
+  status            LeadStatus       @default(new)
+  temperature       LeadTemperature  @default(warm)
+  source            LeadSource       @default(manual)
+  serviceInterest   ServiceInterest?
+  notes             String?          @db.Text
+  moneyBucket       MoneyBucket?
+  timelineBucket    TimelineBucket?
+  convertedClientId String?          @unique
+  assignedToId      String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  convertedClient Client?        @relation("LeadConversion", fields: [convertedClientId], references: [id])
+  assignedTo      User?          @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  activities      LeadActivity[]
+
+  @@index([workspaceId, status])
+  @@index([email, workspaceId])
+}
+
+model LeadActivity {
+  id        String   @id @default(cuid())
+  leadId    String
+  userId    String?
+  type      String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  lead Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([leadId])
+}
+
+// ─── Clients ──────────────────────────────────────────────────────────────────
+
+model Client {
+  id          String   @id @default(cuid())
+  workspaceId String
+  userId      String?
+  name        String
+  email       String
+  phone       String?
+  company     String?
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User?     @relation(fields: [userId], references: [id])
+  lead      Lead?     @relation("LeadConversion")
+  projects  Project[]
+
+  @@index([workspaceId])
+  @@index([userId])
+}
+
+// ─── Projects ─────────────────────────────────────────────────────────────────
+
+model Project {
+  id          String        @id @default(cuid())
+  workspaceId String
+  clientId    String
+  name        String
+  description String?       @db.Text
+  status      ProjectStatus @default(planning)
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client    Client          @relation(fields: [clientId], references: [id])
+  members   ProjectMember[]
+  milestones Milestone[]
+  tasks     Task[]
+  timeEntries TimeEntry[]
+
+  @@index([workspaceId])
+  @@index([clientId])
+}
+
+model ProjectMember {
+  id        String        @id @default(cuid())
+  projectId String
+  userId    String
+  role      WorkspaceRole
+  createdAt DateTime      @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+}
+
+// ─── Milestones ───────────────────────────────────────────────────────────────
+
+model Milestone {
+  id            String          @id @default(cuid())
+  projectId     String
+  title         String
+  description   String?         @db.Text
+  sortOrder     Int
+  status        MilestoneStatus @default(locked)
+  ownerRole     WorkspaceRole
+  paymentStatus String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  project  Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks    Task[]
+  reviews  MilestoneReview[]
+
+  @@index([projectId, sortOrder])
+}
+
+model MilestoneReview {
+  id          String   @id @default(cuid())
+  milestoneId String
+  reviewerId  String
+  status      String
+  feedback    String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  milestone Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  reviewer  User      @relation(fields: [reviewerId], references: [id])
+
+  @@index([milestoneId])
+}
+
+// ─── Tasks ────────────────────────────────────────────────────────────────────
+
+model Task {
+  id            String     @id @default(cuid())
+  milestoneId   String
+  projectId     String
+  title         String
+  description   String?    @db.Text
+  status        TaskStatus @default(draft)
+  sortOrder     Int        @default(0)
+  assignedToId  String?
+  createdById   String
+  clientVisible Boolean    @default(false)
+  forceUnlocked Boolean    @default(false)
+  auditNote     String?    @db.Text
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  milestone   Milestone    @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedTo  User?        @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdBy   User         @relation("TaskCreator", fields: [createdById], references: [id])
+  reviews     TaskReview[]
+  comments    TaskComment[]
+  timeEntries TimeEntry[]
+
+  @@index([milestoneId, sortOrder])
+  @@index([projectId])
+}
+
+model TaskReview {
+  id         String   @id @default(cuid())
+  taskId     String
+  reviewerId String
+  round      Int      @default(1)
+  status     String
+  feedback   String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  reviewer User @relation(fields: [reviewerId], references: [id])
+
+  @@index([taskId])
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+}
+
+model TimeEntry {
+  id          String   @id @default(cuid())
+  taskId      String?
+  projectId   String
+  userId      String
+  hours       Float
+  description String?  @db.Text
+  date        DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  task    Task?   @relation(fields: [taskId], references: [id])
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([projectId])
+  @@index([userId])
+}
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+
+model Notification {
+  id          String           @id @default(cuid())
+  userId      String
+  workspaceId String
+  type        NotificationType
+  title       String
+  message     String           @db.Text
+  read        Boolean          @default(false)
+  link        String?
+  createdAt   DateTime         @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+}

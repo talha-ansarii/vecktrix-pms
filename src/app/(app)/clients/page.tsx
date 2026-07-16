@@ -1,0 +1,55 @@
+import Link from "next/link";
+import { AppShell } from "@/components/AppShell";
+import { PageHeader, StatusBadge, EmptyState } from "@/components/ui";
+import { listClients } from "@/lib/actions/clients";
+import { formatDate } from "@/lib/utils";
+import { CreateProjectForm } from "./CreateProjectForm";
+
+export default async function ClientsPage() {
+  const clients = await listClients().catch(() => []);
+
+  return (
+    <AppShell currentPath="/clients">
+      <PageHeader
+        overline="Accounts"
+        title="Clients"
+        description="Converted leads and active accounts"
+      />
+
+      {clients.length === 0 ? (
+        <EmptyState title="No clients yet" description="Convert qualified leads to create clients." />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {clients.map((client) => (
+            <div key={client.id} className="card-dark">
+              <h3 className="heading-card text-white text-xl mb-1">{client.name}</h3>
+              {client.company && <p className="text-text-darkSecondary text-sm mb-3">{client.company}</p>}
+              <p className="text-sm text-text-darkSecondary mb-4">{client.email}</p>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-text-darkSecondary">
+                  {client._count.projects} project{client._count.projects !== 1 ? "s" : ""}
+                </span>
+                <span className="text-xs text-text-darkSecondary">{formatDate(client.createdAt)}</span>
+              </div>
+              {client.projects.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-white/6 space-y-2">
+                  {client.projects.map((p) => (
+                    <Link
+                      key={p.id}
+                      href={`/projects/${p.id}`}
+                      className="flex items-center justify-between text-sm hover:text-white text-text-darkSecondary"
+                    >
+                      <span>{p.name}</span>
+                      <StatusBadge status={p.status} />
+                    </Link>
+                  ))}
+                </div>
+              )}
+              <CreateProjectForm clientId={client.id} clientName={client.name} />
+            </div>
+          ))}
+        </div>
+      )}
+    </AppShell>
+  );
+}
