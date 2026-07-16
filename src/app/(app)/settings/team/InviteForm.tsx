@@ -18,7 +18,8 @@ export function InviteForm() {
         e.preventDefault();
         setError(null);
         setSuccess(null);
-        const fd = new FormData(e.currentTarget);
+        const form = e.currentTarget;
+        const fd = new FormData(form);
         startTransition(async () => {
           try {
             const result = await inviteUser({
@@ -32,7 +33,7 @@ export function InviteForm() {
                 `Invite saved. Share this link (email not configured): ${result.inviteUrl ?? ""}`,
               );
             }
-            e.currentTarget.reset();
+            form.reset();
           } catch (err) {
             setError(err instanceof Error ? err.message : "Could not create invite");
           }

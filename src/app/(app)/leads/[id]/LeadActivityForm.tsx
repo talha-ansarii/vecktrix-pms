@@ -11,10 +11,11 @@ export function LeadActivityForm({ leadId }: { leadId: string }) {
       className="flex gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        const fd = new FormData(e.currentTarget);
+        const form = e.currentTarget;
+        const fd = new FormData(form);
         startTransition(async () => {
           await addLeadActivity(leadId, fd.get("content") as string);
-          e.currentTarget.reset();
+          form.reset();
         });
       }}
     >
