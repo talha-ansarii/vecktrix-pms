@@ -83,6 +83,10 @@ export async function getClientPortalData() {
     include: {
       projects: {
         include: {
+          files: {
+            where: { clientVisible: true },
+            orderBy: { createdAt: "desc" },
+          },
           milestones: {
             orderBy: { sortOrder: "asc" },
             include: {

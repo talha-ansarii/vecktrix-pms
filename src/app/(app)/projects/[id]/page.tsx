@@ -5,6 +5,7 @@ import { formatStatus } from "@/lib/utils";
 import { notFound } from "next/navigation";
 import { MilestoneActions } from "./MilestoneActions";
 import { MilestoneTaskPanel } from "./MilestoneTaskPanel";
+import { ProjectFilesPanel } from "./ProjectFilesPanel";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -75,6 +76,21 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <p className="text-white">{project.client.name}</p>
             <p className="text-sm text-text-darkSecondary">{project.client.email}</p>
           </div>
+
+          <ProjectFilesPanel
+            projectId={project.id}
+            files={project.files.map((f) => ({
+              id: f.id,
+              name: f.name,
+              url: f.url,
+              size: f.size,
+              mimeType: f.mimeType,
+              clientVisible: f.clientVisible,
+              createdAt: f.createdAt,
+              uploadedBy: f.uploadedBy,
+              milestone: f.milestone,
+            }))}
+          />
         </div>
       </div>
     </AppShell>

@@ -48,6 +48,13 @@ export async function getProject(id: string) {
           reviews: { orderBy: { createdAt: "desc" }, take: 1 },
         },
       },
+      files: {
+        orderBy: { createdAt: "desc" },
+        include: {
+          uploadedBy: { select: { id: true, name: true, email: true } },
+          milestone: { select: { id: true, title: true } },
+        },
+      },
     },
   });
 }

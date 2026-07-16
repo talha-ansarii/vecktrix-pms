@@ -76,6 +76,10 @@ Authorization: Bearer <LEAD_INTAKE_SECRET>
 }
 ```
 
+## Vercel Blob (files)
+
+Add `BLOB_READ_WRITE_TOKEN` to `.env` (Vercel → Storage → Blob → token). On a **project** page, use **Upload**; toggle **Client** so the file appears under **Shared files** in the client portal.
+
 ## Project structure
 
 ```

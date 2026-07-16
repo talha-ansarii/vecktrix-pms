@@ -80,5 +80,5 @@ Update this file every session, every phase completion, and when prompts change 
 - [x] Time entry UI on project detail
 - [x] Invite acceptance flow (`/invite/[token]`)
 - [ ] Email notifications via Msg91
-- [ ] Vercel Blob file uploads
+- [x] Vercel Blob file uploads
 - [ ] E2E tests

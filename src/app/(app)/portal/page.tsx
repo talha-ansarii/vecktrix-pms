@@ -24,6 +24,25 @@ export default async function PortalPage() {
           {client.projects.map((project) => (
             <div key={project.id}>
               <h2 className="heading-card text-white text-2xl mb-4">{project.name}</h2>
+              {project.files.length > 0 && (
+                <div className="card-dark mb-6">
+                  <h3 className="overline-text text-text-darkSecondary mb-3">Shared files</h3>
+                  <ul className="space-y-2">
+                    {project.files.map((file) => (
+                      <li key={file.id}>
+                        <a
+                          href={file.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-white hover:underline"
+                        >
+                          {file.name}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="space-y-4">
                 {project.milestones.map((milestone) => (
                   <div key={milestone.id} className="card-dark">
