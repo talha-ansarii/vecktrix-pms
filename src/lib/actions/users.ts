@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { assertPermission } from "@/lib/rbac";
 import { sendEmail, inviteEmailHtml } from "@/lib/email/send";
 import { linkClientPortalUser } from "@/lib/auth/client-link";
+import { getInviteAcceptUrl } from "@/lib/invites";
 
 const inviteSchema = z.object({
   email: z.string().email(),
@@ -55,8 +56,7 @@ export async function inviteUser(data: z.infer<typeof inviteSchema>) {
   });
 
   const workspace = await prisma.workspace.findUnique({ where: { id: ctx.workspaceId } });
-  const baseUrl = process.env.AUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const inviteUrl = `${baseUrl.replace(/\/$/, "")}/invite/${token}`;
+  const inviteUrl = getInviteAcceptUrl(token);
 
   let emailSent = false;
   try {
@@ -72,7 +72,7 @@ export async function inviteUser(data: z.infer<typeof inviteSchema>) {
   }
 
   revalidatePath("/settings/team");
-  return { invite, emailSent, inviteUrl: emailSent ? undefined : inviteUrl };
+  return { invite, emailSent, inviteUrl };
 }
 
 export async function revokeInvite(inviteId: string) {

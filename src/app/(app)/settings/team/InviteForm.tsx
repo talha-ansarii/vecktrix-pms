@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { inviteUser } from "@/lib/actions/users";
 import { WorkspaceRole } from "@prisma/client";
+import { InviteLinkCopy } from "./InviteLinkCopy";
 
 const ROLES = Object.values(WorkspaceRole);
 
@@ -10,6 +11,7 @@ export function InviteForm() {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [lastInviteUrl, setLastInviteUrl] = useState<string | null>(null);
 
   return (
     <form
@@ -18,6 +20,7 @@ export function InviteForm() {
         e.preventDefault();
         setError(null);
         setSuccess(null);
+        setLastInviteUrl(null);
         const form = e.currentTarget;
         const fd = new FormData(form);
         startTransition(async () => {
@@ -26,13 +29,12 @@ export function InviteForm() {
               email: fd.get("email") as string,
               role: fd.get("role") as WorkspaceRole,
             });
-            if (result.emailSent) {
-              setSuccess("Invite sent by email.");
-            } else {
-              setSuccess(
-                `Invite saved. Share this link (email not configured): ${result.inviteUrl ?? ""}`,
-              );
-            }
+            setLastInviteUrl(result.inviteUrl);
+            setSuccess(
+              result.emailSent
+                ? "Invite sent by email. You can also share this link:"
+                : "Invite saved. Email was not sent — share this link:",
+            );
             form.reset();
           } catch (err) {
             setError(err instanceof Error ? err.message : "Could not create invite");
@@ -54,7 +56,8 @@ export function InviteForm() {
         </button>
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}
-      {success && <p className="text-sm text-emerald-400 break-all">{success}</p>}
+      {success && <p className="text-sm text-emerald-400">{success}</p>}
+      {lastInviteUrl && <InviteLinkCopy url={lastInviteUrl} />}
     </form>
   );
 }

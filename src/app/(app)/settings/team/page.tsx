@@ -8,6 +8,8 @@ import {
   tryAssertAnyPermission,
 } from "@/lib/rbac";
 import { InviteForm } from "./InviteForm";
+import { InviteLinkCopy } from "./InviteLinkCopy";
+import { getInviteAcceptUrl } from "@/lib/invites";
 
 export default async function TeamSettingsPage() {
   const access = await tryAssertAnyPermission(["user:invite", "user:manage"]);
@@ -68,13 +70,16 @@ export default async function TeamSettingsPage() {
           ) : (
             <ul className="space-y-3">
               {invites.map((inv) => (
-                <li key={inv.id} className="flex items-center justify-between border-b border-white/6 pb-3 last:border-0">
-                  <div>
-                    <p className="text-white">{inv.email}</p>
-                    <p className="text-xs text-text-darkSecondary">
-                      {formatStatus(inv.role)} · expires {formatDate(inv.expiresAt)}
-                    </p>
+                <li key={inv.id} className="border-b border-white/6 pb-3 last:border-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-white">{inv.email}</p>
+                      <p className="text-xs text-text-darkSecondary">
+                        {formatStatus(inv.role)} · expires {formatDate(inv.expiresAt)}
+                      </p>
+                    </div>
                   </div>
+                  <InviteLinkCopy url={getInviteAcceptUrl(inv.token)} />
                 </li>
               ))}
             </ul>
