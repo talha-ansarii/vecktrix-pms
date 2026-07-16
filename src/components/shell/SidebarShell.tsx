@@ -21,8 +21,11 @@ import {
   clientNavItems,
   projectNavItems,
   isNavActive,
+  filterAgencyNavItems,
   type NavItem,
+  type NavAccess,
 } from "@/lib/navigation";
+import type { WorkspaceRole } from "@prisma/client";
 
 const COLLAPSE_KEY = "vecktrix-pms-sidebar-collapsed";
 
@@ -36,7 +39,7 @@ export type SidebarShellProps = {
   user: { name?: string | null; email?: string | null };
   workspaceName: string;
   projects: ProjectOption[];
-  agencyNavItems?: NavItem[];
+  navAccess?: NavAccess;
   showProjectSwitcher?: boolean;
 };
 
@@ -337,10 +340,19 @@ function SidebarContent(props: SidebarContentProps) {
     collapsed,
     onNavigate,
     onOpenSearch,
-    agencyNavItems: agencyNavOverride,
+    navAccess,
     showProjectSwitcher = true,
   } = props;
-  const agencyItems = isClient ? clientNavItems : (agencyNavOverride ?? agencyNavItems);
+  const agencyItems = useMemo(() => {
+    if (isClient) return clientNavItems;
+    if (navAccess) {
+      return filterAgencyNavItems(
+        new Set(navAccess.permissions),
+        navAccess.workspaceRole as WorkspaceRole,
+      );
+    }
+    return agencyNavItems;
+  }, [isClient, navAccess]);
   const projectItems =
     currentProject && !isClient && showProjectSwitcher ? projectNavItems(currentProject.id) : [];
 
@@ -412,7 +424,7 @@ export function SidebarShell({
   user,
   workspaceName,
   projects,
-  agencyNavItems: agencyNavOverride,
+  navAccess,
   showProjectSwitcher = true,
 }: SidebarShellProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -440,7 +452,16 @@ export function SidebarShell({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const navItems = isClient ? clientNavItems : (agencyNavOverride ?? agencyNavItems);
+  const navItems = useMemo(() => {
+    if (isClient) return clientNavItems;
+    if (navAccess) {
+      return filterAgencyNavItems(
+        new Set(navAccess.permissions),
+        navAccess.workspaceRole as WorkspaceRole,
+      );
+    }
+    return agencyNavItems;
+  }, [isClient, navAccess]);
 
   const sidebarInner = (
     <SidebarContent
@@ -453,7 +474,7 @@ export function SidebarShell({
       collapsed={collapsed}
       onNavigate={() => setMobileOpen(false)}
       onOpenSearch={() => setSearchOpen(true)}
-      agencyNavItems={agencyNavOverride}
+      navAccess={navAccess}
       showProjectSwitcher={showProjectSwitcher}
     />
   );

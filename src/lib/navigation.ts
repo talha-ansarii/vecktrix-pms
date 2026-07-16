@@ -103,6 +103,11 @@ const AGENCY_NAV_PERMISSION: Record<string, string | null> = {
   "/settings/team": "user:invite",
 };
 
+export type NavAccess = {
+  permissions: string[];
+  workspaceRole: WorkspaceRole;
+};
+
 export function filterAgencyNavItems(
   permissions: Set<string>,
   workspaceRole: WorkspaceRole,

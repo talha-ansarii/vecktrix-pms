@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, signOut, useSession } from "next-auth/react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 
@@ -9,16 +9,20 @@ const URL_ERRORS: Record<string, string> = {
   NoWorkspaceAccess:
     "No workspace access for this account. Ask your admin to invite you, then sign in with the same email (Google or password).",
   AccessDenied: "Sign-in was denied. Use an invited email or contact your admin.",
+  OAuthAccountNotLinked:
+    "This Google account is not linked. Use the email you were invited with, or accept your invite first.",
 };
 
 export function LoginForm() {
   const searchParams = useSearchParams();
+  const { data: session } = useSession();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const code = searchParams.get("error");
     if (code && URL_ERRORS[code]) setError(URL_ERRORS[code]);
+    else if (code === "AccessDenied") setError(URL_ERRORS.AccessDenied);
   }, [searchParams]);
 
   async function handleCredentials(e: React.FormEvent<HTMLFormElement>) {
@@ -36,12 +40,14 @@ export function LoginForm() {
     setLoading(false);
 
     if (result?.error) {
-      setError("Invalid email or password");
+      setError("Invalid email or password, or no workspace access for this account.");
       return;
     }
 
     window.location.href = "/dashboard";
   }
+
+  const showSignOut = Boolean(session?.user) && (error || searchParams.get("error"));
 
   return (
     <div className="w-full max-w-md">
@@ -52,6 +58,19 @@ export function LoginForm() {
       </div>
 
       <div className="card-dark space-y-6">
+        {showSignOut && (
+          <div className="rounded-[4px] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+            Signed in as {session?.user?.email}. Use another account or ask for an invite.
+            <button
+              type="button"
+              className="block mt-2 text-white underline"
+              onClick={() => signOut({ callbackUrl: "/login" })}
+            >
+              Sign out
+            </button>
+          </div>
+        )}
+
         {process.env.NEXT_PUBLIC_GOOGLE_ENABLED !== "false" && (
           <button
             type="button"

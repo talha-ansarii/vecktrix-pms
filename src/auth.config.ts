@@ -16,7 +16,16 @@ export const authConfig = {
       if (isApiAuth || isIntakeApi) return true;
       if (isInvitePage) return true;
       if (isLoginPage) {
-        if (isLoggedIn) return Response.redirect(new URL("/dashboard", nextUrl));
+        if (isLoggedIn) {
+          const u = auth.user as { workspaceId?: string; workspaceRole?: string };
+          if (u.workspaceId) {
+            if (u.workspaceRole === "client") {
+              return Response.redirect(new URL("/portal", nextUrl));
+            }
+            return Response.redirect(new URL("/dashboard", nextUrl));
+          }
+          return true;
+        }
         return true;
       }
       if (!isLoggedIn) return false;

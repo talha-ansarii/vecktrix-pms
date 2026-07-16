@@ -25,7 +25,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (account?.provider === "google") {
         if (!user.id || !user.email) return false;
         const allowed = await ensureGoogleWorkspaceMembership(user.id, user.email);
-        if (!allowed) return "/login?error=NoWorkspaceAccess";
+        if (!allowed) return false;
       }
       return true;
     },
@@ -79,6 +79,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!valid) return null;
 
         const member = user.workspaceMembers[0];
+        if (!member) return null;
+
         return {
           id: user.id,
           email: user.email,

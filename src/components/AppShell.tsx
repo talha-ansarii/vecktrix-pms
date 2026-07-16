@@ -5,9 +5,8 @@ import {
   roleHasPermission,
 } from "@/lib/rbac";
 import { listProjects } from "@/lib/actions/projects";
-import { filterAgencyNavItems } from "@/lib/navigation";
 import { SidebarShell } from "@/components/shell/SidebarShell";
-import type { NavItem } from "@/lib/navigation";
+import type { NavAccess } from "@/lib/navigation";
 import type { WorkspaceRole } from "@prisma/client";
 
 export async function AppShell({
@@ -28,14 +27,17 @@ export async function AppShell({
   };
 
   let workspaceName = "Vecktrix Agency";
-  let agencyNav: NavItem[] | undefined;
+  let navAccess: NavAccess | undefined;
   let showProjectSwitcher = false;
 
   try {
     const ctx = await getSessionContext();
     workspaceName = ctx.workspace.name;
     const permissions = await getUserPermissions(ctx.userId, ctx.workspaceId);
-    agencyNav = filterAgencyNavItems(permissions, ctx.workspaceRole);
+    navAccess = {
+      permissions: [...permissions],
+      workspaceRole: ctx.workspaceRole,
+    };
     showProjectSwitcher = roleHasPermission(
       permissions,
       "project:read",
@@ -62,7 +64,7 @@ export async function AppShell({
         name: p.name,
         client: p.client,
       }))}
-      agencyNavItems={agencyNav}
+      navAccess={navAccess}
       showProjectSwitcher={showProjectSwitcher}
     >
       {children}
