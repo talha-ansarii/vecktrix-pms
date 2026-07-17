@@ -9,10 +9,12 @@ import {
   type LeadTimelineItem,
   pipelineStageLabel,
 } from "@/lib/leads/pipeline";
-import { MessageSquare, FileUp, RefreshCw, Sparkles } from "lucide-react";
+import { MessageSquare, FileUp, RefreshCw, Sparkles, Send, XCircle } from "lucide-react";
 
 function ActivityIcon({ type }: { type: string }) {
   if (type === "note") return <MessageSquare className="h-4 w-4 text-blue-300" />;
+  if (type === "proposal_sent") return <Send className="h-4 w-4 text-violet-300" />;
+  if (type === "proposal_rejected") return <XCircle className="h-4 w-4 text-red-400" />;
   if (type.startsWith("file")) return <FileUp className="h-4 w-4 text-amber-300" />;
   if (type === "converted") return <Sparkles className="h-4 w-4 text-emerald-300" />;
   return <RefreshCw className="h-4 w-4 text-text-darkSecondary" />;
@@ -68,7 +70,13 @@ export function LeadConversationTimeline({
                       <StatusBadge status={item.pipelineStatus} className="!text-[10px] !py-0" />
                     )}
                   </div>
-                  <p className="text-sm text-white whitespace-pre-wrap">{item.content}</p>
+                  <p
+                    className={`text-sm whitespace-pre-wrap ${
+                      item.type === "proposal_rejected" ? "text-red-200/90" : "text-white"
+                    }`}
+                  >
+                    {item.content}
+                  </p>
                   <p className="text-xs text-text-darkSecondary mt-2">
                     {item.user?.name ?? item.user?.email ?? "System"} · {formatDateTime(item.createdAt)}
                   </p>

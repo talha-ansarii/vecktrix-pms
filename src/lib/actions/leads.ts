@@ -190,7 +190,10 @@ export async function updateLeadStatus(leadId: string, status: LeadStatus) {
       leadId: lead.id,
       userId: ctx.userId,
       type: "status",
-      content: `Stage updated to ${status.replace(/_/g, " ")}.`,
+      content:
+        status === LeadStatus.proposal
+          ? "Moved to proposal — share documents and track client response on this timeline."
+          : `Stage updated to ${status.replace(/_/g, " ")}.`,
       pipelineStatus: status,
     },
   });

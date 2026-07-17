@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { TaskStatus, WorkspaceRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { appendProjectActivity } from "@/lib/project-activity";
 import {
   assertAgencyAccess,
   assertNotClientForTaskReview,
@@ -135,6 +136,12 @@ export async function approveTask(taskId: string) {
     data: { status: TaskStatus.todo },
   });
 
+  await appendProjectActivity(task.projectId, {
+    actorUserId: ctx.userId,
+    type: "task_pm_approved",
+    content: `PM approved task "${task.title}" for delivery.`,
+  });
+
   revalidatePath(`/projects/${task.projectId}`);
   return updated;
 }
@@ -203,6 +210,14 @@ export async function reviewTask(data: z.infer<typeof reviewSchema>) {
       data: { status: newStatus },
     }),
   ]);
+
+  if (newStatus === TaskStatus.approved) {
+    await appendProjectActivity(task.projectId, {
+      actorUserId: ctx.userId,
+      type: "task_approved",
+      content: `Task "${task.title}" passed internal review.`,
+    });
+  }
 
   revalidatePath(`/projects/${task.projectId}`);
 }

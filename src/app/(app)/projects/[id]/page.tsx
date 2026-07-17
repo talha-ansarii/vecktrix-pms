@@ -92,6 +92,15 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         />
       )}
 
+      {caps.canMemberManage && project.members.length < 3 && (
+        <div className="card-dark mb-6 border border-white/10 p-4">
+          <p className="text-white font-medium text-sm">Assign delivery team</p>
+          <p className="text-xs text-text-darkSecondary mt-1">
+            Per the delivery workflow, add Designer, PE, and QA as project members so they only see this project.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           <h2 className="overline-text text-text-darkSecondary">Milestones</h2>

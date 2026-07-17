@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
+import { LeadStatus } from "@prisma/client";
 import { assertAgencyAccess } from "@/lib/rbac";
 import { deleteFromBlob, uploadToBlob } from "@/lib/storage/blob";
 
@@ -44,12 +45,19 @@ export async function uploadLeadFile(formData: FormData) {
   });
 
   const lead = await prisma.lead.findFirstOrThrow({ where: { id: leadId } });
+  const activityType =
+    lead.status === LeadStatus.proposal ? "proposal_sent" : "file_upload";
+  const activityContent =
+    lead.status === LeadStatus.proposal
+      ? `Proposal document shared: ${uploaded.name}`
+      : `Uploaded document: ${uploaded.name}`;
+
   await prisma.leadActivity.create({
     data: {
       leadId,
       userId: ctx.userId,
-      type: "file_upload",
-      content: `Uploaded document: ${uploaded.name}`,
+      type: activityType,
+      content: activityContent,
       pipelineStatus: lead.status,
     },
   });

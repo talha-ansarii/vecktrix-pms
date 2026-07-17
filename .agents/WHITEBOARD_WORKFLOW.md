@@ -95,3 +95,5 @@ flowchart LR
 | Portal payment CTA | Done |
 | Full project activity audit | Done (`ProjectActivity` + hub feed) |
 | Proposal rejected UX | Done |
+| Proposal sent logging | Done |
+| Task + client review activity logging | Done |

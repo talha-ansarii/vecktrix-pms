@@ -34,7 +34,8 @@ export function activityTypeLabel(type: string) {
     updated: "Details updated",
     converted: "Converted",
     file_upload: "Document uploaded",
-    file_removed: "Document removed",
+    proposal_sent: "Proposal sent",
+    proposal_rejected: "Proposal rejected",
   };
   return map[type] ?? type;
 }

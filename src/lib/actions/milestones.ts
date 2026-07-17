@@ -138,6 +138,12 @@ export async function submitMilestoneForClientReview(milestoneId: string) {
     href: `/projects/${milestone.projectId}`,
   });
 
+  await appendProjectActivity(milestone.projectId, {
+    actorUserId: ctx.userId,
+    type: "client_review_sent",
+    content: `Sent milestone "${milestone.title}" to client for review.`,
+  });
+
   revalidatePath(`/projects/${milestone.projectId}`);
   revalidatePath("/portal");
   return updated;
@@ -179,6 +185,17 @@ export async function clientReviewMilestone(data: z.infer<typeof clientReviewSch
 
   if (nextStatus === MilestoneStatus.completed) {
     await unlockNextMilestone(milestone.projectId, milestone.sortOrder);
+    await appendProjectActivity(milestone.projectId, {
+      actorUserId: ctx.userId,
+      type: "client_milestone_approved",
+      content: `Client approved milestone "${milestone.title}".`,
+    });
+  } else {
+    await appendProjectActivity(milestone.projectId, {
+      actorUserId: ctx.userId,
+      type: "client_milestone_changes",
+      content: `Client requested changes on milestone "${milestone.title}".`,
+    });
   }
 
   revalidatePath("/portal");
