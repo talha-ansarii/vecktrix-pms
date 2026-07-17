@@ -8,6 +8,7 @@ import { assertAgencyAccess, assertPermission, getSessionContext } from "@/lib/r
 import { sendEmail, milestoneReviewEmailHtml } from "@/lib/email/send";
 import { notifyWorkspaceRole } from "@/lib/notifications/events";
 import { appendProjectPlanLog } from "@/lib/project-plan";
+import { appendProjectActivity } from "@/lib/project-activity";
 
 const transitionSchema = z.object({
   milestoneId: z.string(),
@@ -80,6 +81,14 @@ export async function updateMilestoneStatus(data: z.infer<typeof transitionSchem
     where: { id: milestoneId },
     data: { status },
   });
+
+  if (status === MilestoneStatus.internal_complete) {
+    await appendProjectActivity(milestone.projectId, {
+      actorUserId: ctx.userId,
+      type: "milestone_internal_complete",
+      content: `Milestone "${milestone.title}" marked internally complete.`,
+    });
+  }
 
   revalidatePath(`/projects/${milestone.projectId}`);
   return updated;
@@ -197,6 +206,12 @@ export async function qaSignOffMilestone(milestoneId: string) {
     data: { qaSignedOffAt: new Date() },
   });
 
+  await appendProjectActivity(milestone.projectId, {
+    actorUserId: ctx.userId,
+    type: "qa_signoff",
+    content: `QA signed off milestone "${milestone.title}".`,
+  });
+
   await notifyWorkspaceRole({
     workspaceId: ctx.workspaceId,
     roles: ["project_manager"],
@@ -241,6 +256,11 @@ export async function updatePaymentStatus(milestoneId: string, paymentStatus: st
 
   if (paymentStatus === "paid" && milestone.status === MilestoneStatus.completed) {
     await unlockNextMilestone(milestone.projectId, milestone.sortOrder);
+    await appendProjectActivity(milestone.projectId, {
+      actorUserId: ctx.userId,
+      type: "milestone_paid",
+      content: `Payment recorded for "${milestone.title}"; next milestone may unlock.`,
+    });
   }
 
   revalidatePath(`/projects/${milestone.projectId}`);

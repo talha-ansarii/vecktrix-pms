@@ -6,6 +6,7 @@ import { MilestoneStatus, WorkspaceRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { assertAgencyAccess } from "@/lib/rbac";
 import { appendProjectPlanLog } from "@/lib/project-plan";
+import { appendProjectActivity } from "@/lib/project-activity";
 
 const milestoneDraftSchema = z.object({
   title: z.string().min(1),
@@ -173,6 +174,12 @@ export async function createDraftProjectFromClient(data: z.infer<typeof createHa
     type: "project_created",
     summary: `Draft project "${project.name}" created${promoted.length ? ` with ${promoted.length} shared file(s) from the lead` : ""}.`,
     clientVisible: false,
+  });
+
+  await appendProjectActivity(project.id, {
+    actorUserId: ctx.userId,
+    type: "project_created",
+    content: `Draft project created${input.assignPmUserId ? " with assigned PM" : ""}.`,
   });
 
   if (client.lead?.id) {

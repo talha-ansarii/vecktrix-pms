@@ -251,6 +251,39 @@ export async function convertLeadToClient(leadId: string) {
   return result;
 }
 
+export async function rejectLeadProposal(leadId: string, reason?: string) {
+  const ctx = await assertAgencyAccess("lead:write");
+
+  const lead = await prisma.lead.findFirstOrThrow({
+    where: { id: leadId, workspaceId: ctx.workspaceId },
+  });
+
+  if (lead.status !== LeadStatus.proposal) {
+    throw new Error("Only leads in proposal stage can be marked as proposal rejected");
+  }
+
+  const note = reason?.trim() || "Proposal declined by the client.";
+
+  const updated = await prisma.lead.update({
+    where: { id: leadId },
+    data: { status: LeadStatus.lost },
+  });
+
+  await prisma.leadActivity.create({
+    data: {
+      leadId,
+      userId: ctx.userId,
+      type: "proposal_rejected",
+      content: `Proposal rejected. ${note}`,
+      pipelineStatus: LeadStatus.lost,
+    },
+  });
+
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+  return updated;
+}
+
 export async function addLeadActivity(leadId: string, content: string) {
   const ctx = await assertAgencyAccess("lead:write");
 

@@ -42,6 +42,36 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       workspaceRole === "qa_engineer" || workspaceRole === "agency_admin",
   };
 
+  const activityFeed = [
+    ...project.planLogs.map((log) => ({
+      id: `log-${log.id}`,
+      at: log.createdAt,
+      title: log.summary,
+      meta: [
+        log.actor ? (log.actor.name ?? log.actor.email) : null,
+        !log.clientVisible ? "internal" : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      tone: "default" as const,
+    })),
+    ...project.planClientNotes.map((note) => ({
+      id: `note-${note.id}`,
+      at: note.createdAt,
+      title: "Client plan concern",
+      meta: `${note.user.name ?? note.user.email}`,
+      body: note.content,
+      tone: "client" as const,
+    })),
+    ...project.activities.map((a) => ({
+      id: `act-${a.id}`,
+      at: a.createdAt,
+      title: a.content,
+      meta: a.user ? (a.user.name ?? a.user.email) : "System",
+      tone: "delivery" as const,
+    })),
+  ].sort((a, b) => b.at.getTime() - a.at.getTime());
+
   return (
     <AppShell currentPath={`/projects/${project.id}`} currentProject={{ id: project.id, name: project.name }}>
       <PageHeader
@@ -174,27 +204,28 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
           />
 
           <div className="card-dark">
-            <h3 className="overline-text text-text-darkSecondary mb-3">Plan activity</h3>
-            {project.planLogs.length === 0 && project.planClientNotes.length === 0 ? (
-              <p className="text-sm text-text-darkSecondary">No plan updates yet.</p>
+            <h3 className="overline-text text-text-darkSecondary mb-3">Project activity</h3>
+            {activityFeed.length === 0 ? (
+              <p className="text-sm text-text-darkSecondary">No activity yet.</p>
             ) : (
               <ul className="space-y-3 max-h-80 overflow-y-auto">
-                {project.planLogs.map((log) => (
-                  <li key={log.id} className="text-sm border-b border-white/6 pb-2">
-                    <p className="text-white">{log.summary}</p>
-                    <p className="text-xs text-text-darkSecondary mt-1">
-                      {formatDate(log.createdAt)}
-                      {log.actor && ` · ${log.actor.name ?? log.actor.email}`}
-                      {!log.clientVisible && " · internal"}
+                {activityFeed.map((item) => (
+                  <li key={item.id} className="text-sm border-b border-white/6 pb-2">
+                    <p
+                      className={
+                        item.tone === "client"
+                          ? "text-amber-200/90 text-xs mb-1"
+                          : item.tone === "delivery"
+                            ? "text-emerald-400/80 text-xs mb-1"
+                            : "hidden"
+                      }
+                    >
+                      {item.tone === "client" ? item.title : item.tone === "delivery" ? "Delivery" : null}
                     </p>
-                  </li>
-                ))}
-                {project.planClientNotes.map((note) => (
-                  <li key={note.id} className="text-sm border-b border-white/6 pb-2">
-                    <p className="text-amber-200/90">Client note</p>
-                    <p className="text-text-darkSecondary">{note.content}</p>
+                    <p className="text-white">{item.tone === "client" ? item.body : item.title}</p>
                     <p className="text-xs text-text-darkSecondary mt-1">
-                      {formatDate(note.createdAt)} · {note.user.name ?? note.user.email}
+                      {formatDate(item.at)}
+                      {item.meta ? ` · ${item.meta}` : ""}
                     </p>
                   </li>
                 ))}

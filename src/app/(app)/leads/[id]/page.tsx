@@ -6,6 +6,7 @@ import { getLead, listLeadAssigneeOptions } from "@/lib/actions/leads";
 import { getSessionWithPermissions, roleHasPermission, tryAssertPermission } from "@/lib/rbac";
 import { ConvertLeadButton } from "../ConvertLeadButton";
 import { LeadEditButton } from "../LeadEditButton";
+import { LeadRejectProposalButton } from "../LeadRejectProposalButton";
 import { LeadStatusSelect } from "../LeadStatusSelect";
 import { canConvertLead } from "@/lib/leads/pipeline";
 import { LeadPipelineBar } from "./LeadPipelineBar";
@@ -82,6 +83,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           )}
         </div>
       </header>
+
+      {canWrite && lead.status === "proposal" && !lead.convertedClientId && (
+        <LeadRejectProposalButton leadId={lead.id} />
+      )}
 
       {showConvert && (
         <div className="card-dark mb-6 border-emerald-500/25 bg-emerald-500/5 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">

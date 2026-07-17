@@ -93,4 +93,5 @@ flowchart LR
 | Admin assigns PM on handoff | Done |
 | Role-aware dashboard | Done |
 | Portal payment CTA | Done |
-| Full project activity audit | Backlog |
+| Full project activity audit | Done (`ProjectActivity` + hub feed) |
+| Proposal rejected UX | Done |

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { assertAgencyAccess } from "@/lib/rbac";
 import { DEFAULT_MILESTONES } from "@/lib/services/milestones";
 import { appendProjectPlanLog } from "@/lib/project-plan";
+import { appendProjectActivity } from "@/lib/project-activity";
 import { notifyUser } from "@/lib/notifications/events";
 import {
   assertProjectVisible,
@@ -81,6 +82,11 @@ export async function getProject(id: string) {
         take: 50,
         include: { user: { select: { name: true, email: true } } },
       },
+      activities: {
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: { user: { select: { name: true, email: true } } },
+      },
     },
   });
 }
@@ -147,6 +153,12 @@ export async function addProjectMember(data: z.infer<typeof addMemberSchema>) {
       userId: parsed.userId,
       role: parsed.role,
     },
+  });
+
+  await appendProjectActivity(project.id, {
+    actorUserId: ctx.userId,
+    type: "member_added",
+    content: `Team member added with role ${parsed.role.replace(/_/g, " ")}.`,
   });
 
   revalidatePath(`/projects/${project.id}`);
@@ -248,6 +260,12 @@ export async function publishProjectToClient(projectId: string) {
     clientVisible: true,
   });
 
+  await appendProjectActivity(projectId, {
+    actorUserId: ctx.userId,
+    type: "published",
+    content: "Published to client portal.",
+  });
+
   if (project.client.userId) {
     await notifyUser({
       userId: project.client.userId,
@@ -287,6 +305,12 @@ export async function unpublishProjectFromClient(projectId: string) {
     summary:
       "This project was hidden from the client portal. Your team can still work on it internally.",
     clientVisible: true,
+  });
+
+  await appendProjectActivity(projectId, {
+    actorUserId: ctx.userId,
+    type: "unpublished",
+    content: "Unpublished from client portal.",
   });
 
   revalidatePath(`/projects/${projectId}`);

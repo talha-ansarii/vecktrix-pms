@@ -9,6 +9,7 @@ import { formatMoneyBucket, formatTimelineBucket } from "@/lib/leads/buckets";
 import { canConvertLead } from "@/lib/leads/pipeline";
 import { ConvertLeadButton } from "./ConvertLeadButton";
 import { LeadStatusSelect } from "./LeadStatusSelect";
+import { LeadRejectProposalButton } from "./LeadRejectProposalButton";
 import { LeadsPipelineStepper } from "./LeadsPipelineStepper";
 import { LeadsFilters } from "./LeadsFilters";
 import { EditLeadModal } from "./EditLeadModal";
@@ -117,6 +118,9 @@ export function LeadsWorkspace({
                             Edit
                           </button>
                           <LeadStatusSelect leadId={lead.id} status={lead.status} />
+                          {col === LeadStatus.proposal && (
+                            <LeadRejectProposalButton leadId={lead.id} variant="compact" />
+                          )}
                         </div>
                       )}
                       {canConvert && canConvertLead(lead.status, lead.convertedClientId) && (

@@ -160,6 +160,7 @@ model User {
   projectFiles      ProjectFile[]     @relation("FileUploader")
   projectPlanLogs     ProjectPlanLog[]
   projectPlanNotes    ProjectPlanClientNote[]
+  projectActivities   ProjectActivity[]
 }
 
 model Account {
@@ -392,6 +393,7 @@ model Project {
   files     ProjectFile[]
   planLogs  ProjectPlanLog[]
   planClientNotes ProjectPlanClientNote[]
+  activities ProjectActivity[]
 
   @@index([workspaceId])
   @@index([clientId])
@@ -576,6 +578,21 @@ model ProjectPlanClientNote {
   project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user    User            @relation(fields: [userId], references: [id])
   planLog ProjectPlanLog? @relation(fields: [planLogId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+}
+
+model ProjectActivity {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String?
+  type      String
+  content   String   @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id])
 
   @@index([projectId, createdAt])
 }
