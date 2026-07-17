@@ -123,8 +123,9 @@ export function LeadDetailForm({
           </select>
         </Field>
         <p className="text-xs text-text-darkSecondary">
-          Move to <strong className="text-white font-medium">qualified</strong> or{" "}
-          <strong className="text-white font-medium">proposal</strong> before converting to a client.
+          Move to <strong className="text-white font-medium">qualified</strong>,{" "}
+          <strong className="text-white font-medium">proposal</strong>, or{" "}
+          <strong className="text-white font-medium">won</strong>, then use Convert to client.
         </p>
       </Section>
 

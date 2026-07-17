@@ -5,6 +5,7 @@ import { z } from "zod";
 import { LeadStatus, LeadTemperature, LeadSource, ServiceInterest } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { assertAgencyAccess } from "@/lib/rbac";
+import { canConvertLead } from "@/lib/leads/pipeline";
 
 const createLeadSchema = z.object({
   name: z.string().min(1),
@@ -206,8 +207,8 @@ export async function convertLeadToClient(leadId: string) {
     where: { id: leadId, workspaceId: ctx.workspaceId },
   });
 
-  if (!["qualified", "proposal"].includes(lead.status)) {
-    throw new Error("Lead must be qualified or proposal to convert");
+  if (!canConvertLead(lead.status, lead.convertedClientId)) {
+    throw new Error("Lead must be qualified, proposal, or won (and not already converted)");
   }
 
   if (lead.convertedClientId) {

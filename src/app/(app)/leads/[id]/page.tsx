@@ -7,6 +7,7 @@ import { getSessionWithPermissions, roleHasPermission, tryAssertPermission } fro
 import { ConvertLeadButton } from "../ConvertLeadButton";
 import { LeadEditButton } from "../LeadEditButton";
 import { LeadStatusSelect } from "../LeadStatusSelect";
+import { canConvertLead } from "@/lib/leads/pipeline";
 import { LeadPipelineBar } from "./LeadPipelineBar";
 import { LeadConversationTimeline } from "./LeadConversationTimeline";
 import { LeadTalkForm } from "./LeadTalkForm";
@@ -35,8 +36,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   ]);
   if (!lead) notFound();
 
-  const showConvert =
-    canConvert && ["qualified", "proposal"].includes(lead.status) && !lead.convertedClientId;
+  const showConvert = canConvert && canConvertLead(lead.status, lead.convertedClientId);
 
   const timelineItems = lead.activities.map((a) => ({
     id: a.id,
@@ -72,8 +72,28 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         <div className="flex flex-wrap gap-2 shrink-0">
           {canWrite && <LeadEditButton leadId={lead.id} />}
           {showConvert && <ConvertLeadButton leadId={lead.id} />}
+          {lead.convertedClient && (
+            <Link
+              href={`/clients?highlight=${lead.convertedClient.id}`}
+              className="btn-primary-dark text-sm py-2 px-4"
+            >
+              View client →
+            </Link>
+          )}
         </div>
       </header>
+
+      {showConvert && (
+        <div className="card-dark mb-6 border-emerald-500/25 bg-emerald-500/5 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <p className="text-white font-medium">Convert to client</p>
+            <p className="text-sm text-text-darkSecondary mt-1">
+              Create a client record from this lead, then add a project and portal invite on the Clients page.
+            </p>
+          </div>
+          <ConvertLeadButton leadId={lead.id} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
         <div className="space-y-6 min-w-0">

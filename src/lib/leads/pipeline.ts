@@ -12,6 +12,16 @@ export const LEAD_PIPELINE_STAGES: LeadStatus[] = [
 
 export const LEAD_TERMINAL_STAGES: LeadStatus[] = [LeadStatus.lost, LeadStatus.archived];
 
+export const CONVERTIBLE_LEAD_STATUSES: LeadStatus[] = [
+  LeadStatus.qualified,
+  LeadStatus.proposal,
+  LeadStatus.won,
+];
+
+export function canConvertLead(status: LeadStatus, convertedClientId: string | null) {
+  return !convertedClientId && CONVERTIBLE_LEAD_STATUSES.includes(status);
+}
+
 export function pipelineStageLabel(status: LeadStatus) {
   return formatStatus(status);
 }

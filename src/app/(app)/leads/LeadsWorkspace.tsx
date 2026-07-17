@@ -6,6 +6,7 @@ import { LeadStatus } from "@prisma/client";
 import { StatusBadge } from "@/components/ui";
 import { formatDate, formatStatus } from "@/lib/utils";
 import { formatMoneyBucket, formatTimelineBucket } from "@/lib/leads/buckets";
+import { canConvertLead } from "@/lib/leads/pipeline";
 import { ConvertLeadButton } from "./ConvertLeadButton";
 import { LeadStatusSelect } from "./LeadStatusSelect";
 import { LeadsPipelineStepper } from "./LeadsPipelineStepper";
@@ -118,9 +119,7 @@ export function LeadsWorkspace({
                           <LeadStatusSelect leadId={lead.id} status={lead.status} />
                         </div>
                       )}
-                      {canConvert &&
-                        ["qualified", "proposal"].includes(lead.status) &&
-                        !lead.convertedClientId && (
+                      {canConvert && canConvertLead(lead.status, lead.convertedClientId) && (
                           <div className="mt-2">
                             <ConvertLeadButton leadId={lead.id} size="xs" />
                           </div>
@@ -191,7 +190,7 @@ export function LeadsWorkspace({
                       <Link href="/clients" className="text-xs text-emerald-400 hover:underline">
                         View client
                       </Link>
-                    ) : canConvert && ["qualified", "proposal"].includes(lead.status) ? (
+                    ) : canConvert && canConvertLead(lead.status, lead.convertedClientId) ? (
                       <ConvertLeadButton leadId={lead.id} size="xs" />
                     ) : null}
                     </div>
