@@ -2,13 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { MilestoneStatus, TaskStatus, WorkspaceRole, Prisma } from "@prisma/client";
+import { MilestoneStatus, PaymentStatus, TaskStatus, WorkspaceRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { assertAgencyAccess, assertPermission, getSessionContext } from "@/lib/rbac";
 import { sendEmail, milestoneReviewEmailHtml } from "@/lib/email/send";
 import { notifyWorkspaceRole } from "@/lib/notifications/events";
-import { appendProjectPlanLog } from "@/lib/project-plan";
 import { appendProjectActivity } from "@/lib/project-activity";
+import { writeLog } from "@/domain/audit/log";
 
 const transitionSchema = z.object({
   milestoneId: z.string(),
@@ -42,11 +42,12 @@ async function assertMilestoneTasksComplete(milestoneId: string) {
   }
 }
 
-async function unlockNextMilestone(projectId: string, completedSortOrder: number) {
+export async function unlockNextMilestone(projectId: string, completedSortOrder: number) {
   const completed = await prisma.milestone.findFirst({
     where: { projectId, sortOrder: completedSortOrder },
+    include: { payment: true },
   });
-  if (!completed || completed.paymentStatus !== "paid") return;
+  if (!completed || completed.payment?.status !== PaymentStatus.paid) return;
 
   const next = await prisma.milestone.findFirst({
     where: { projectId, sortOrder: completedSortOrder + 1 },
@@ -57,6 +58,14 @@ async function unlockNextMilestone(projectId: string, completedSortOrder: number
       data: { status: MilestoneStatus.active },
     });
   }
+}
+
+async function ensurePaymentRecord(milestoneId: string, amount?: number | null) {
+  const existing = await prisma.payment.findUnique({ where: { milestoneId } });
+  if (existing) return existing;
+  return prisma.payment.create({
+    data: { milestoneId, amount: amount ?? undefined, status: PaymentStatus.pending },
+  });
 }
 
 export async function updateMilestoneStatus(data: z.infer<typeof transitionSchema>) {
@@ -103,7 +112,6 @@ export async function submitMilestoneForClientReview(milestoneId: string) {
   });
 
   await assertMilestoneTasksComplete(milestoneId);
-
   if (!milestone.qaSignedOffAt) {
     throw new Error("QA must sign off before sending this milestone to the client");
   }
@@ -160,12 +168,12 @@ export async function clientReviewMilestone(data: z.infer<typeof clientReviewSch
       status: MilestoneStatus.awaiting_client_review,
       project: { client: { userId: ctx.userId } },
     },
-    include: { project: true },
+    include: { project: { select: { id: true, clientId: true } } },
   });
 
   const nextStatus =
     parsed.status === "client_approved"
-      ? MilestoneStatus.completed
+      ? MilestoneStatus.client_approved
       : MilestoneStatus.client_changes_requested;
 
   await prisma.$transaction([
@@ -183,30 +191,40 @@ export async function clientReviewMilestone(data: z.infer<typeof clientReviewSch
     }),
   ]);
 
-  if (nextStatus === MilestoneStatus.completed) {
-    await unlockNextMilestone(milestone.projectId, milestone.sortOrder);
+  if (nextStatus === MilestoneStatus.client_approved) {
+    const completed = await prisma.milestone.update({
+      where: { id: parsed.milestoneId },
+      data: { status: MilestoneStatus.completed },
+    });
+    const proposalMilestone = await prisma.proposalMilestone.findFirst({
+      where: {
+        proposal: { lead: { convertedClientId: milestone.project.clientId } },
+        sortOrder: milestone.sortOrder,
+      },
+    });
+    await ensurePaymentRecord(milestone.id, proposalMilestone?.amount);
     await appendProjectActivity(milestone.projectId, {
       actorUserId: ctx.userId,
       type: "client_milestone_approved",
-      content: `Client approved milestone "${milestone.title}".`,
+      content: `Client approved milestone "${milestone.title}". Awaiting payment.`,
     });
-  } else {
-    await appendProjectActivity(milestone.projectId, {
-      actorUserId: ctx.userId,
-      type: "client_milestone_changes",
-      content: `Client requested changes on milestone "${milestone.title}".`,
-    });
+    revalidatePath("/portal");
+    revalidatePath(`/projects/${milestone.projectId}`);
+    return completed;
   }
+
+  await appendProjectActivity(milestone.projectId, {
+    actorUserId: ctx.userId,
+    type: "client_milestone_changes",
+    content: `Client requested changes on milestone "${milestone.title}".`,
+  });
 
   revalidatePath("/portal");
   revalidatePath(`/projects/${milestone.projectId}`);
 }
 
 export async function qaSignOffMilestone(milestoneId: string) {
-  const ctx = await assertAgencyAccess("milestone:write");
-  if (ctx.workspaceRole !== "qa_engineer" && ctx.workspaceRole !== "agency_admin") {
-    throw new Error("Only QA can sign off milestones");
-  }
+  const ctx = await assertAgencyAccess("milestone:qa_signoff");
 
   const milestone = await prisma.milestone.findFirstOrThrow({
     where: { id: milestoneId, project: { workspaceId: ctx.workspaceId } },
@@ -227,15 +245,6 @@ export async function qaSignOffMilestone(milestoneId: string) {
     actorUserId: ctx.userId,
     type: "qa_signoff",
     content: `QA signed off milestone "${milestone.title}".`,
-  });
-
-  await notifyWorkspaceRole({
-    workspaceId: ctx.workspaceId,
-    roles: ["project_manager"],
-    type: "milestone",
-    title: "QA signed off milestone",
-    message: milestone.title,
-    href: `/projects/${milestone.projectId}`,
   });
 
   revalidatePath(`/projects/${milestone.projectId}`);
@@ -259,37 +268,13 @@ export async function overrideMilestone(milestoneId: string, note: string) {
   return { updated, note: note.trim(), overriddenBy: ctx.userId };
 }
 
-export async function updatePaymentStatus(milestoneId: string, paymentStatus: string) {
-  const ctx = await assertAgencyAccess("payment:write");
-
-  const milestone = await prisma.milestone.findFirstOrThrow({
-    where: { id: milestoneId, project: { workspaceId: ctx.workspaceId } },
-  });
-
-  const updated = await prisma.milestone.update({
-    where: { id: milestoneId },
-    data: { paymentStatus },
-  });
-
-  if (paymentStatus === "paid" && milestone.status === MilestoneStatus.completed) {
-    await unlockNextMilestone(milestone.projectId, milestone.sortOrder);
-    await appendProjectActivity(milestone.projectId, {
-      actorUserId: ctx.userId,
-      type: "milestone_paid",
-      content: `Payment recorded for "${milestone.title}"; next milestone may unlock.`,
-    });
-  }
-
-  revalidatePath(`/projects/${milestone.projectId}`);
-  return updated;
-}
-
 const planUpdateSchema = z.object({
   milestoneId: z.string(),
   title: z.string().min(1).optional(),
-  sortOrder: z.number().int().positive().optional(),
+  sortOrder: z.number().int().min(0).optional(),
   ownerRole: z.nativeEnum(WorkspaceRole).optional(),
   description: z.string().optional(),
+  dueDate: z.string().optional().nullable(),
 });
 
 export async function updateMilestonePlan(data: z.infer<typeof planUpdateSchema>) {
@@ -298,26 +283,8 @@ export async function updateMilestonePlan(data: z.infer<typeof planUpdateSchema>
 
   const milestone = await prisma.milestone.findFirstOrThrow({
     where: { id: parsed.milestoneId, project: { workspaceId: ctx.workspaceId } },
-    include: { project: { select: { id: true, publishedToClient: true, publishedAt: true } } },
+    include: { project: { select: { id: true, publishedToClient: true } } },
   });
-
-  const changes: Record<string, { from: unknown; to: unknown }> = {};
-  if (parsed.title !== undefined && parsed.title !== milestone.title) {
-    changes.title = { from: milestone.title, to: parsed.title };
-  }
-  if (parsed.sortOrder !== undefined && parsed.sortOrder !== milestone.sortOrder) {
-    changes.sortOrder = { from: milestone.sortOrder, to: parsed.sortOrder };
-  }
-  if (parsed.ownerRole !== undefined && parsed.ownerRole !== milestone.ownerRole) {
-    changes.ownerRole = { from: milestone.ownerRole, to: parsed.ownerRole };
-  }
-  if (parsed.description !== undefined && parsed.description !== milestone.description) {
-    changes.description = { from: milestone.description, to: parsed.description };
-  }
-
-  if (Object.keys(changes).length === 0) {
-    return milestone;
-  }
 
   const updated = await prisma.milestone.update({
     where: { id: parsed.milestoneId },
@@ -326,28 +293,32 @@ export async function updateMilestonePlan(data: z.infer<typeof planUpdateSchema>
       sortOrder: parsed.sortOrder,
       ownerRole: parsed.ownerRole,
       description: parsed.description,
+      dueDate: parsed.dueDate === undefined ? undefined : parsed.dueDate ? new Date(parsed.dueDate) : null,
     },
   });
 
-  const shouldLog =
-    milestone.project.publishedToClient || milestone.project.publishedAt != null;
-  if (shouldLog) {
-    const parts: string[] = [];
-    if (changes.title) parts.push(`renamed to "${parsed.title}"`);
-    if (changes.sortOrder) parts.push(`moved to position ${parsed.sortOrder}`);
-    if (changes.ownerRole) parts.push(`owner set to ${parsed.ownerRole}`);
-    if (changes.description) parts.push("description updated");
-
-    await appendProjectPlanLog(milestone.project.id, {
+  if (milestone.project.publishedToClient) {
+    await writeLog({
+      workspaceId: ctx.workspaceId,
+      entityType: "project",
+      entityId: milestone.project.id,
+      action: "milestone_plan_updated",
+      content: `Milestone "${milestone.title}" plan updated.`,
       actorUserId: ctx.userId,
-      type: "milestone_plan_updated",
-      summary: `Milestone "${milestone.title}" plan updated: ${parts.join("; ")}.`,
-      metadata: { milestoneId: milestone.id, changes } as Prisma.InputJsonValue,
-      clientVisible: true,
+      metadata: { milestoneId: milestone.id, clientVisible: true },
     });
   }
 
   revalidatePath(`/projects/${milestone.project.id}`);
   revalidatePath("/portal");
   return updated;
+}
+
+/** @deprecated use markPaymentPaid */
+export async function updatePaymentStatus(milestoneId: string, paymentStatus: string) {
+  if (paymentStatus === "paid") {
+    const { markPaymentPaid } = await import("@/lib/actions/payments");
+    return markPaymentPaid(milestoneId);
+  }
+  throw new Error("Only marking paid is supported in v2");
 }

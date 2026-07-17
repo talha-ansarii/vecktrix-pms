@@ -136,23 +136,6 @@ export async function acceptInvite(data: z.infer<typeof acceptInviteSchema>) {
       },
     });
 
-    const role = await tx.role.findUnique({
-      where: { workspaceId_slug: { workspaceId: invite.workspaceId, slug: invite.role } },
-    });
-    if (role) {
-      await tx.userRole.upsert({
-        where: {
-          userId_roleId_workspaceId: {
-            userId: u.id,
-            roleId: role.id,
-            workspaceId: invite.workspaceId,
-          },
-        },
-        update: {},
-        create: { userId: u.id, roleId: role.id, workspaceId: invite.workspaceId },
-      });
-    }
-
     await tx.invite.update({
       where: { id: invite.id },
       data: { status: "accepted", acceptedAt: new Date() },

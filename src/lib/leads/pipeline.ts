@@ -1,72 +1,64 @@
 import { LeadStatus } from "@prisma/client";
 import { formatStatus } from "@/lib/utils";
 
-/** Primary sales path left-to-right; terminal states shown after. */
 export const LEAD_PIPELINE_STAGES: LeadStatus[] = [
   LeadStatus.new,
   LeadStatus.contacted,
   LeadStatus.qualified,
-  LeadStatus.proposal,
-  LeadStatus.won,
 ];
 
 export const LEAD_TERMINAL_STAGES: LeadStatus[] = [LeadStatus.lost, LeadStatus.archived];
-
-export const CONVERTIBLE_LEAD_STATUSES: LeadStatus[] = [
-  LeadStatus.qualified,
-  LeadStatus.proposal,
-  LeadStatus.won,
-];
-
-export function canConvertLead(status: LeadStatus, convertedClientId: string | null) {
-  return !convertedClientId && CONVERTIBLE_LEAD_STATUSES.includes(status);
-}
 
 export function pipelineStageLabel(status: LeadStatus) {
   return formatStatus(status);
 }
 
-export function activityTypeLabel(type: string) {
+export function activityActionLabel(action: string) {
   const map: Record<string, string> = {
     created: "Lead created",
     note: "Conversation",
-    status: "Stage change",
+    status_changed: "Stage change",
     updated: "Details updated",
-    converted: "Converted",
-    file_upload: "Document uploaded",
+    contact_added: "Contact added",
+    contact_updated: "Contact updated",
+    contact_removed: "Contact removed",
+    proposal_created: "Proposal drafted",
     proposal_sent: "Proposal sent",
+    proposal_accepted: "Proposal accepted",
     proposal_rejected: "Proposal rejected",
+    client_created: "Client created",
+    project_created: "Project created",
+    published: "Published to portal",
   };
-  return map[type] ?? type;
+  return map[action] ?? action;
 }
 
+/** @deprecated use activityActionLabel */
+export const activityTypeLabel = activityActionLabel;
+
+export type TimelineItem = {
+  id: string;
+  action: string;
+  content: string;
+  metadata?: unknown;
+  createdAt: string;
+  actor: { name: string | null; email: string } | null;
+};
+
+/** @deprecated legacy timeline shape */
 export type LeadTimelineItem = {
   id: string;
   type: string;
+  action?: string;
   content: string;
-  pipelineStatus: LeadStatus | null;
+  pipelineStatus?: LeadStatus | null;
   createdAt: string;
   user: { name: string | null; email: string } | null;
+  actor?: { name: string | null; email: string } | null;
 };
 
-export function groupActivitiesByStage(activities: LeadTimelineItem[]) {
-  const stages: (LeadStatus | "other")[] = [...LEAD_PIPELINE_STAGES, ...LEAD_TERMINAL_STAGES, "other"];
-  const sorted = [...activities].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
-
-  const groups: { stage: LeadStatus | "other"; items: LeadTimelineItem[] }[] = [];
-
-  for (const stage of stages) {
-    if (stage === "other") {
-      const known = new Set([...LEAD_PIPELINE_STAGES, ...LEAD_TERMINAL_STAGES]);
-      const items = sorted.filter((a) => !a.pipelineStatus || !known.has(a.pipelineStatus));
-      if (items.length) groups.push({ stage: "other", items });
-      continue;
-    }
-    const items = sorted.filter((a) => a.pipelineStatus === stage);
-    if (items.length) groups.push({ stage, items });
-  }
-
-  return groups;
+export function groupActivitiesByStage(_activities: LeadTimelineItem[]) {
+  return [] as { stage: LeadStatus | "other"; items: LeadTimelineItem[] }[];
 }
+
+export { canCreateClient, proposalStageLabel } from "./pipeline-helpers";

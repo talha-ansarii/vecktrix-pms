@@ -9,10 +9,13 @@
     "lint": "next lint",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
+    "db:pre-migrate": "tsx scripts/pre-migrate-v1-data.ts",
+    "db:post-migrate": "tsx scripts/post-migrate-v1-data.ts",
+    "db:recover-v1": "tsx scripts/recover-v1-data.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "test:e2e": "playwright test",
-    "test:unit": "node --import tsx --test src/lib/leads/pipeline.test.ts",
+    "test:unit": "node --import tsx --test src/lib/leads/pipeline.test.ts src/lib/leads/proposal-state.test.ts src/lib/deadlines.test.ts src/domain/rbac/matrix.test.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

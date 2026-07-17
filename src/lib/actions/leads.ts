@@ -2,40 +2,28 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { LeadStatus, LeadTemperature, LeadSource, ServiceInterest } from "@prisma/client";
+import { LeadStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { assertAgencyAccess } from "@/lib/rbac";
-import { canConvertLead } from "@/lib/leads/pipeline";
-
-const createLeadSchema = z.object({
-  name: z.string().min(1),
-  email: z.string().email(),
-  phone: z.string().optional(),
-  company: z.string().optional(),
-  serviceInterest: z.nativeEnum(ServiceInterest).optional(),
-  notes: z.string().optional(),
-  temperature: z.nativeEnum(LeadTemperature).optional(),
-  moneyBucket: z.enum(["low", "mid", "high"]).optional(),
-  timelineBucket: z.enum(["short", "medium", "long"]).optional(),
-});
-
-const updateLeadSchema = createLeadSchema.partial().extend({
-  id: z.string(),
-  status: z.nativeEnum(LeadStatus).optional(),
-  assignedToId: z.string().nullable().optional(),
-});
+import { assertAgencyAccess, assertAdminOnly } from "@/lib/rbac";
+import { writeLog } from "@/domain/audit/log";
+import { createLeadSchema, updateLeadSchema } from "@/domain/leads/lead.schema";
+import {
+  addLeadNoteInWorkspace,
+  createLeadInWorkspace,
+  getLeadInWorkspace,
+  listLeadsInWorkspace,
+  updateLeadInWorkspace,
+  updateLeadStatusInWorkspace,
+} from "@/domain/leads/lead.service";
 
 const PIPELINE_STATUSES: LeadStatus[] = [
   LeadStatus.new,
   LeadStatus.contacted,
   LeadStatus.qualified,
-  LeadStatus.proposal,
-  LeadStatus.won,
 ];
 
 export async function listLeadAssigneeOptions() {
   const ctx = await assertAgencyAccess("lead:read");
-
   const members = await prisma.workspaceMember.findMany({
     where: {
       workspaceId: ctx.workspaceId,
@@ -44,134 +32,49 @@ export async function listLeadAssigneeOptions() {
     include: { user: { select: { id: true, name: true, email: true } } },
     orderBy: { createdAt: "asc" },
   });
-
   return members.map((m) => m.user);
 }
 
 export async function getLeadStatusCounts() {
   const ctx = await assertAgencyAccess("lead:read");
-
   const rows = await prisma.lead.groupBy({
     by: ["status"],
     where: { workspaceId: ctx.workspaceId },
     _count: { _all: true },
   });
-
   const counts: Record<string, number> = {};
-  for (const s of Object.values(LeadStatus)) {
-    counts[s] = 0;
-  }
-  for (const row of rows) {
-    counts[row.status] = row._count._all;
-  }
+  for (const s of Object.values(LeadStatus)) counts[s] = 0;
+  for (const row of rows) counts[row.status] = row._count._all;
   return { counts, pipeline: PIPELINE_STATUSES };
 }
 
 export async function listLeads(filters?: {
   status?: LeadStatus;
-  temperature?: LeadTemperature;
+  temperature?: import("@prisma/client").LeadTemperature;
   moneyBucket?: "low" | "mid" | "high";
   timelineBucket?: "short" | "medium" | "long";
 }) {
   const ctx = await assertAgencyAccess("lead:read");
-
-  return prisma.lead.findMany({
-    where: {
-      workspaceId: ctx.workspaceId,
-      ...(filters?.status ? { status: filters.status } : {}),
-      ...(filters?.temperature ? { temperature: filters.temperature } : {}),
-      ...(filters?.moneyBucket ? { moneyBucket: filters.moneyBucket } : {}),
-      ...(filters?.timelineBucket ? { timelineBucket: filters.timelineBucket } : {}),
-    },
-    include: {
-      assignedTo: { select: { id: true, name: true, email: true } },
-      convertedClient: { select: { id: true, name: true, email: true } },
-      activities: { orderBy: { createdAt: "desc" }, take: 5 },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  return listLeadsInWorkspace(ctx.workspaceId, filters);
 }
 
 export async function getLead(id: string) {
   const ctx = await assertAgencyAccess("lead:read");
-  return prisma.lead.findFirstOrThrow({
-    where: { id, workspaceId: ctx.workspaceId },
-    include: {
-      assignedTo: { select: { id: true, name: true, email: true } },
-      convertedClient: { select: { id: true, name: true, email: true } },
-      files: {
-        include: { uploadedBy: { select: { id: true, name: true, email: true } } },
-        orderBy: { createdAt: "desc" },
-      },
-      activities: {
-        orderBy: { createdAt: "desc" },
-        include: { user: { select: { name: true, email: true } } },
-      },
-    },
-  });
+  return getLeadInWorkspace(ctx.workspaceId, id);
 }
 
 export async function createLead(data: z.infer<typeof createLeadSchema>) {
   const ctx = await assertAgencyAccess("lead:write");
   const parsed = createLeadSchema.parse(data);
-
-  const lead = await prisma.lead.create({
-    data: {
-      ...parsed,
-      workspaceId: ctx.workspaceId,
-      source: LeadSource.manual,
-    },
-  });
-
-  await prisma.leadActivity.create({
-    data: {
-      leadId: lead.id,
-      userId: ctx.userId,
-      type: "created",
-      content: "Lead entered the pipeline.",
-      pipelineStatus: LeadStatus.new,
-    },
-  });
-
+  const lead = await createLeadInWorkspace(ctx.workspaceId, ctx.userId, parsed);
   revalidatePath("/leads");
   return lead;
 }
 
 export async function updateLead(data: z.infer<typeof updateLeadSchema>) {
   const ctx = await assertAgencyAccess("lead:write");
-  const { id, ...rest } = updateLeadSchema.parse(data);
-
-  const before = await prisma.lead.findFirstOrThrow({
-    where: { id, workspaceId: ctx.workspaceId },
-  });
-
-  const lead = await prisma.lead.update({
-    where: { id, workspaceId: ctx.workspaceId },
-    data: rest,
-  });
-
-  if (rest.status && rest.status !== before.status) {
-    await prisma.leadActivity.create({
-      data: {
-        leadId: lead.id,
-        userId: ctx.userId,
-        type: "status",
-        content: `Stage updated to ${rest.status.replace(/_/g, " ")}.`,
-        pipelineStatus: rest.status,
-      },
-    });
-  } else {
-    await prisma.leadActivity.create({
-      data: {
-        leadId: lead.id,
-        userId: ctx.userId,
-        type: "updated",
-        content: `Lead details updated (${Object.keys(rest).join(", ")}).`,
-        pipelineStatus: lead.status,
-      },
-    });
-  }
-
+  const parsed = updateLeadSchema.parse(data);
+  const lead = await updateLeadInWorkspace(ctx.workspaceId, ctx.userId, parsed);
   revalidatePath("/leads");
   revalidatePath(`/leads/${lead.id}`);
   return lead;
@@ -179,47 +82,46 @@ export async function updateLead(data: z.infer<typeof updateLeadSchema>) {
 
 export async function updateLeadStatus(leadId: string, status: LeadStatus) {
   const ctx = await assertAgencyAccess("lead:write");
-
-  const lead = await prisma.lead.update({
-    where: { id: leadId, workspaceId: ctx.workspaceId },
-    data: { status },
-  });
-
-  await prisma.leadActivity.create({
-    data: {
-      leadId: lead.id,
-      userId: ctx.userId,
-      type: "status",
-      content:
-        status === LeadStatus.proposal
-          ? "Moved to proposal — share documents and track client response on this timeline."
-          : `Stage updated to ${status.replace(/_/g, " ")}.`,
-      pipelineStatus: status,
-    },
-  });
-
+  const lead = await updateLeadStatusInWorkspace(ctx.workspaceId, ctx.userId, leadId, status);
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);
   return lead;
 }
 
-export async function convertLeadToClient(leadId: string) {
-  const ctx = await assertAgencyAccess("lead:convert");
+export async function addLeadNote(leadId: string, content: string) {
+  const ctx = await assertAgencyAccess("lead:write");
+  const log = await addLeadNoteInWorkspace(ctx.workspaceId, ctx.userId, leadId, content);
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+  return log;
+}
 
+export async function getLeadActivity(leadId: string) {
+  const ctx = await assertAgencyAccess("lead:read");
+  await prisma.lead.findFirstOrThrow({ where: { id: leadId, workspaceId: ctx.workspaceId } });
+  const { listForLeadGraph } = await import("@/domain/audit/log");
+  return listForLeadGraph(ctx.workspaceId, leadId);
+}
+
+/** @deprecated use addLeadNote */
+export async function addLeadActivity(leadId: string, content: string) {
+  return addLeadNote(leadId, content);
+}
+
+/** Admin-only: create client from accepted proposal */
+export async function createClientFromProposal(leadId: string) {
+  const ctx = await assertAdminOnly();
   const lead = await prisma.lead.findFirstOrThrow({
     where: { id: leadId, workspaceId: ctx.workspaceId },
+    include: { proposal: true },
   });
-
-  if (!canConvertLead(lead.status, lead.convertedClientId)) {
-    throw new Error("Lead must be qualified, proposal, or won (and not already converted)");
+  if (!lead.proposal || lead.proposal.status !== "accepted") {
+    throw new Error("Proposal must be accepted before creating client");
   }
+  if (lead.convertedClientId) throw new Error("Lead already converted");
 
-  if (lead.convertedClientId) {
-    throw new Error("Lead already converted");
-  }
-
-  const result = await prisma.$transaction(async (tx) => {
-    const client = await tx.client.create({
+  const client = await prisma.$transaction(async (tx) => {
+    const c = await tx.client.create({
       data: {
         workspaceId: ctx.workspaceId,
         name: lead.name,
@@ -229,82 +131,73 @@ export async function convertLeadToClient(leadId: string) {
         notes: lead.notes,
       },
     });
-
     await tx.lead.update({
       where: { id: leadId },
-      data: { status: LeadStatus.won, convertedClientId: client.id },
+      data: { convertedClientId: c.id, status: LeadStatus.qualified },
     });
+    return c;
+  });
 
-    await tx.leadActivity.create({
-      data: {
-        leadId,
-        userId: ctx.userId,
-        type: "converted",
-        content: `Converted to client ${client.name}. Next: create a project and send a portal invite.`,
-        pipelineStatus: LeadStatus.won,
-      },
-    });
-
-    return client;
+  await writeLog({
+    workspaceId: ctx.workspaceId,
+    entityType: "client",
+    entityId: client.id,
+    action: "client_created",
+    content: `Client ${client.name} created from accepted proposal.`,
+    actorUserId: ctx.userId,
+    metadata: { leadId },
+  });
+  await writeLog({
+    workspaceId: ctx.workspaceId,
+    entityType: "lead",
+    entityId: leadId,
+    action: "client_created",
+    content: `Converted to client ${client.name}.`,
+    actorUserId: ctx.userId,
   });
 
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/clients");
-  return result;
+  return client;
+}
+
+/** Blocked for Sales — use createClientFromProposal (Admin) */
+export async function convertLeadToClient(leadId: string) {
+  await assertAdminOnly();
+  return createClientFromProposal(leadId);
 }
 
 export async function rejectLeadProposal(leadId: string, reason?: string) {
-  const ctx = await assertAgencyAccess("lead:write");
-
+  const ctx = await assertAgencyAccess("proposal:write");
   const lead = await prisma.lead.findFirstOrThrow({
     where: { id: leadId, workspaceId: ctx.workspaceId },
+    include: { proposal: true },
   });
-
-  if (lead.status !== LeadStatus.proposal) {
-    throw new Error("Only leads in proposal stage can be marked as proposal rejected");
-  }
+  if (!lead.proposal) throw new Error("No proposal on this lead");
 
   const note = reason?.trim() || "Proposal declined by the client.";
-
-  const updated = await prisma.lead.update({
-    where: { id: leadId },
-    data: { status: LeadStatus.lost },
+  await prisma.$transaction(async (tx) => {
+    await tx.proposal.update({
+      where: { id: lead.proposal!.id },
+      data: { status: "rejected", decidedAt: new Date() },
+    });
+    await tx.lead.update({
+      where: { id: leadId },
+      data: { status: LeadStatus.lost },
+    });
   });
 
-  await prisma.leadActivity.create({
-    data: {
-      leadId,
-      userId: ctx.userId,
-      type: "proposal_rejected",
-      content: `Proposal rejected. ${note}`,
-      pipelineStatus: LeadStatus.lost,
-    },
-  });
-
-  revalidatePath("/leads");
-  revalidatePath(`/leads/${leadId}`);
-  return updated;
-}
-
-export async function addLeadActivity(leadId: string, content: string) {
-  const ctx = await assertAgencyAccess("lead:write");
-
-  const lead = await prisma.lead.findFirstOrThrow({
-    where: { id: leadId, workspaceId: ctx.workspaceId },
-  });
-
-  const activity = await prisma.leadActivity.create({
-    data: {
-      leadId,
-      userId: ctx.userId,
-      type: "note",
-      content,
-      pipelineStatus: lead.status,
-    },
+  await writeLog({
+    workspaceId: ctx.workspaceId,
+    entityType: "proposal",
+    entityId: lead.proposal.id,
+    action: "proposal_rejected",
+    content: note,
+    actorUserId: ctx.userId,
   });
 
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);
-  return activity;
+  return lead;
 }

@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import type { WorkspaceRole } from "@prisma/client";
+import { permissionsForRole, roleHasPermission as matrixHasPermission, type Permission } from "@/domain/rbac/matrix";
 
 export class AuthError extends Error {
   constructor(message = "Unauthorized") {
@@ -36,70 +37,42 @@ export async function getSessionContext() {
   };
 }
 
-export async function getUserPermissions(userId: string, workspaceId: string): Promise<Set<string>> {
-  const userRoles = await prisma.userRole.findMany({
-    where: { userId, workspaceId },
-    include: {
-      role: {
-        include: {
-          rolePermissions: { include: { permission: true } },
-        },
-      },
-    },
-  });
-
-  const member = await prisma.workspaceMember.findUnique({
-    where: { userId_workspaceId: { userId, workspaceId } },
-  });
-
-  const perms = new Set<string>();
-  for (const ur of userRoles) {
-    for (const rp of ur.role.rolePermissions) {
-      perms.add(rp.permission.key);
-    }
-  }
-
-  // Fallback: map workspace role to default role slug
-  if (perms.size === 0 && member) {
-    const role = await prisma.role.findUnique({
-      where: { workspaceId_slug: { workspaceId, slug: member.role } },
-      include: { rolePermissions: { include: { permission: true } } },
-    });
-    role?.rolePermissions.forEach((rp) => perms.add(rp.permission.key));
-  }
-
-  return perms;
+export function getUserPermissions(workspaceRole: WorkspaceRole) {
+  return permissionsForRole(workspaceRole);
 }
 
-export async function assertPermission(permission: string) {
-  const ctx = await getSessionContext();
-  const perms = await getUserPermissions(ctx.userId, ctx.workspaceId);
-
-  if (!perms.has(permission) && !perms.has("*")) {
-    // agency_admin gets all via seed
-    if (ctx.workspaceRole !== "agency_admin") {
-      throw new ForbiddenError(`Missing permission: ${permission}`);
-    }
+/** Supports legacy 3-arg UI calls and 2-arg service calls */
+export function roleHasPermission(
+  permissionsOrRole: Set<string> | WorkspaceRole,
+  permission: Permission | string,
+  workspaceRole?: WorkspaceRole,
+) {
+  if (workspaceRole !== undefined) {
+    const perms = permissionsOrRole as Set<string>;
+    if (workspaceRole === "agency_admin") return true;
+    return perms.has(permission) || perms.has("*");
   }
+  return matrixHasPermission(permissionsOrRole as WorkspaceRole, permission as Permission);
+}
 
+export async function assertPermission(permission: Permission) {
+  const ctx = await getSessionContext();
+  if (!matrixHasPermission(ctx.workspaceRole, permission)) {
+    throw new ForbiddenError(`Missing permission: ${permission}`);
+  }
   return ctx;
 }
 
-export async function assertAnyPermission(permissions: string[]) {
+export async function assertAnyPermission(permissions: Permission[]) {
   const ctx = await getSessionContext();
-  const perms = await getUserPermissions(ctx.userId, ctx.workspaceId);
-
   if (ctx.workspaceRole === "agency_admin") return ctx;
-
-  const hasAny = permissions.some((p) => perms.has(p));
+  const hasAny = permissions.some((p) => matrixHasPermission(ctx.workspaceRole, p));
   if (!hasAny) throw new ForbiddenError(`Missing one of: ${permissions.join(", ")}`);
-
   return ctx;
 }
 
 export async function assertProjectRole(projectId: string, allowedRoles: WorkspaceRole[]) {
   const ctx = await getSessionContext();
-
   if (ctx.workspaceRole === "agency_admin") return ctx;
 
   const member = await prisma.projectMember.findUnique({
@@ -109,7 +82,6 @@ export async function assertProjectRole(projectId: string, allowedRoles: Workspa
   if (!member || !allowedRoles.includes(member.role)) {
     throw new ForbiddenError("Insufficient project role");
   }
-
   return ctx;
 }
 
@@ -117,22 +89,13 @@ export function isClientRole(role: WorkspaceRole) {
   return role === "client";
 }
 
-export function roleHasPermission(
-  permissions: Set<string>,
-  permission: string,
-  workspaceRole: WorkspaceRole,
-) {
-  if (workspaceRole === "agency_admin") return true;
-  return permissions.has(permission) || permissions.has("*");
-}
-
 export async function getSessionWithPermissions() {
   const ctx = await getSessionContext();
-  const permissions = await getUserPermissions(ctx.userId, ctx.workspaceId);
+  const permissions = getUserPermissions(ctx.workspaceRole);
   return { ...ctx, permissions };
 }
 
-export async function tryAssertPermission(permission: string) {
+export async function tryAssertPermission(permission: Permission) {
   try {
     const ctx = await assertPermission(permission);
     return { ok: true as const, ctx };
@@ -142,7 +105,7 @@ export async function tryAssertPermission(permission: string) {
   }
 }
 
-export async function tryAssertAnyPermission(permissions: string[]) {
+export async function tryAssertAnyPermission(permissions: Permission[]) {
   try {
     const ctx = await assertAnyPermission(permissions);
     return { ok: true as const, ctx };
@@ -153,15 +116,21 @@ export async function tryAssertAnyPermission(permissions: string[]) {
 }
 
 export function assertNotClientForTaskReview(role: WorkspaceRole) {
-  if (role === "client") {
-    throw new ForbiddenError("Clients cannot review tasks");
-  }
+  if (role === "client") throw new ForbiddenError("Clients cannot review tasks");
 }
 
-export async function assertAgencyAccess(permission: string) {
+export async function assertAgencyAccess(permission: Permission) {
   const ctx = await assertPermission(permission);
   if (isClientRole(ctx.workspaceRole)) {
     throw new ForbiddenError("Clients cannot access agency resources");
+  }
+  return ctx;
+}
+
+export async function assertAdminOnly() {
+  const ctx = await getSessionContext();
+  if (ctx.workspaceRole !== "agency_admin") {
+    throw new ForbiddenError("Admin only");
   }
   return ctx;
 }

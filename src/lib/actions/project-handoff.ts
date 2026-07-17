@@ -4,14 +4,15 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { MilestoneStatus, WorkspaceRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { assertAgencyAccess } from "@/lib/rbac";
-import { appendProjectPlanLog } from "@/lib/project-plan";
-import { appendProjectActivity } from "@/lib/project-activity";
+import { assertAgencyAccess, assertAdminOnly } from "@/lib/rbac";
+import { writeLog } from "@/domain/audit/log";
+import { DEFAULT_PROPOSAL_MILESTONES } from "@/domain/proposals/proposal.schema";
 
 const milestoneDraftSchema = z.object({
   title: z.string().min(1),
-  sortOrder: z.number().int().positive(),
+  sortOrder: z.number().int().min(0),
   ownerRole: z.nativeEnum(WorkspaceRole),
+  amount: z.number().optional(),
 });
 
 const createHandoffSchema = z.object({
@@ -19,35 +20,37 @@ const createHandoffSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   startDate: z.string().optional(),
-  milestones: z.array(milestoneDraftSchema).min(1),
-  leadFileIds: z.array(z.string()).default([]),
+  milestones: z.array(milestoneDraftSchema).optional(),
+  proposalFileIds: z.array(z.string()).default([]),
   assignPmUserId: z.string().optional(),
 });
 
 export async function getClientHandoffContext(clientId: string) {
-  const ctx = await assertAgencyAccess("project:read");
-
+  const ctx = await assertAgencyAccess("client:read");
   const client = await prisma.client.findFirstOrThrow({
     where: { id: clientId, workspaceId: ctx.workspaceId },
     include: {
       projects: { select: { id: true, name: true, publishedToClient: true } },
       lead: {
         include: {
-          files: {
-            include: { uploadedBy: { select: { name: true, email: true } } },
-            orderBy: { createdAt: "desc" },
+          proposal: {
+            include: {
+              milestones: { orderBy: { sortOrder: "asc" } },
+              files: {
+                include: { uploadedBy: { select: { name: true, email: true } } },
+                orderBy: { createdAt: "desc" },
+              },
+            },
           },
         },
       },
     },
   });
-
   return client;
 }
 
 export async function listHandoffPmOptions() {
-  const ctx = await assertAgencyAccess("project:write");
-
+  const ctx = await assertAdminOnly();
   return prisma.workspaceMember.findMany({
     where: {
       workspaceId: ctx.workspaceId,
@@ -58,60 +61,62 @@ export async function listHandoffPmOptions() {
   });
 }
 
-async function promoteLeadFiles(
+async function promoteProposalFiles(
   projectId: string,
-  leadId: string | undefined,
-  leadFileIds: string[],
+  proposalId: string | undefined,
+  fileIds: string[],
   workspaceId: string,
   uploadedById: string,
 ) {
-  if (leadFileIds.length === 0 || !leadId) return [];
-
-  const files = await prisma.leadFile.findMany({
+  if (fileIds.length === 0 || !proposalId) return [];
+  const files = await prisma.proposalFile.findMany({
     where: {
-      id: { in: leadFileIds },
-      leadId,
-      lead: { workspaceId },
+      id: { in: fileIds },
+      proposalId,
+      proposal: { lead: { workspaceId } },
     },
   });
-
   const created = [];
-  for (const lf of files) {
+  for (const pf of files) {
     const existing = await prisma.projectFile.findUnique({
-      where: { sourceLeadFileId: lf.id },
+      where: { sourceProposalFileId: pf.id },
     });
     if (existing) continue;
-
-    const pf = await prisma.projectFile.create({
+    const record = await prisma.projectFile.create({
       data: {
         projectId,
-        name: lf.name,
-        url: lf.url,
-        storageKey: lf.storageKey,
-        mimeType: lf.mimeType,
-        size: lf.size,
+        name: pf.name,
+        url: pf.url,
+        storageKey: pf.storageKey,
+        mimeType: pf.mimeType,
+        size: pf.size,
         clientVisible: true,
-        sourceLeadFileId: lf.id,
+        sourceProposalFileId: pf.id,
         uploadedById,
       },
     });
-    created.push(pf);
+    created.push(record);
   }
   return created;
 }
 
 export async function createDraftProjectFromClient(data: z.infer<typeof createHandoffSchema>) {
-  const ctx = await assertAgencyAccess("project:write");
+  const ctx = await assertAdminOnly();
   const parsed = createHandoffSchema.safeParse(data);
   if (!parsed.success) {
-    const first = parsed.error.issues[0];
-    throw new Error(first?.message ?? "Invalid project details");
+    throw new Error(parsed.error.issues[0]?.message ?? "Invalid project details");
   }
   const input = parsed.data;
 
   const client = await prisma.client.findFirstOrThrow({
     where: { id: input.clientId, workspaceId: ctx.workspaceId },
-    include: { lead: { select: { id: true, status: true } } },
+    include: {
+      lead: {
+        include: {
+          proposal: { include: { milestones: { orderBy: { sortOrder: "asc" } } } },
+        },
+      },
+    },
   });
 
   if (input.assignPmUserId) {
@@ -125,6 +130,21 @@ export async function createDraftProjectFromClient(data: z.infer<typeof createHa
     if (!pmMember) throw new Error("Selected user cannot be assigned as project manager");
   }
 
+  const milestoneSource =
+    input.milestones && input.milestones.length > 0
+      ? input.milestones
+      : client.lead?.proposal?.milestones.map((m) => ({
+          title: m.title,
+          sortOrder: m.sortOrder,
+          ownerRole: m.ownerRole,
+          amount: m.amount ?? undefined,
+        })) ??
+        DEFAULT_PROPOSAL_MILESTONES.map((m) => ({
+          title: m.title,
+          sortOrder: m.sortOrder,
+          ownerRole: m.ownerRole,
+        }));
+
   const project = await prisma.$transaction(async (tx) => {
     const p = await tx.project.create({
       data: {
@@ -134,11 +154,12 @@ export async function createDraftProjectFromClient(data: z.infer<typeof createHa
         description: input.description,
         publishedToClient: false,
         sourceLeadId: client.lead?.id,
+        sourceProposalId: client.lead?.proposal?.id,
         startDate: input.startDate ? new Date(input.startDate) : undefined,
       },
     });
 
-    for (const m of input.milestones) {
+    for (const m of milestoneSource) {
       await tx.milestone.create({
         data: {
           projectId: p.id,
@@ -161,36 +182,31 @@ export async function createDraftProjectFromClient(data: z.infer<typeof createHa
     return p;
   });
 
-  const promoted = await promoteLeadFiles(
+  const promoted = await promoteProposalFiles(
     project.id,
-    client.lead?.id,
-    input.leadFileIds,
+    client.lead?.proposal?.id,
+    input.proposalFileIds,
     ctx.workspaceId,
     ctx.userId,
   );
 
-  await appendProjectPlanLog(project.id, {
+  await writeLog({
+    workspaceId: ctx.workspaceId,
+    entityType: "project",
+    entityId: project.id,
+    action: "project_created",
+    content: `Draft project "${project.name}" created${promoted.length ? ` with ${promoted.length} shared file(s)` : ""}.`,
     actorUserId: ctx.userId,
-    type: "project_created",
-    summary: `Draft project "${project.name}" created${promoted.length ? ` with ${promoted.length} shared file(s) from the lead` : ""}.`,
-    clientVisible: false,
-  });
-
-  await appendProjectActivity(project.id, {
-    actorUserId: ctx.userId,
-    type: "project_created",
-    content: `Draft project created${input.assignPmUserId ? " with assigned PM" : ""}.`,
   });
 
   if (client.lead?.id) {
-    await prisma.leadActivity.create({
-      data: {
-        leadId: client.lead.id,
-        userId: ctx.userId,
-        type: "updated",
-        content: `Draft project created: ${project.name}`,
-        pipelineStatus: client.lead?.status,
-      },
+    await writeLog({
+      workspaceId: ctx.workspaceId,
+      entityType: "lead",
+      entityId: client.lead.id,
+      action: "project_created",
+      content: `Draft project created: ${project.name}`,
+      actorUserId: ctx.userId,
     });
   }
 

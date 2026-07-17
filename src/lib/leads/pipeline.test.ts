@@ -1,22 +1,19 @@
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { canConvertLead } from "./pipeline.ts";
-import { LeadStatus } from "@prisma/client";
-import { projectListRequiresMembership } from "../rbac/project-scope.ts";
+import { describe, it } from "node:test";
+import { ProposalStatus } from "@prisma/client";
+import { canCreateClient } from "./pipeline-helpers";
+import { roleHasPermission } from "@/domain/rbac/matrix";
 
-describe("lead pipeline", () => {
-  it("allows convert for proposal without client", () => {
-    assert.equal(canConvertLead(LeadStatus.proposal, null), true);
+describe("pipeline v2", () => {
+  it("canCreateClient when proposal accepted", () => {
+    assert.equal(canCreateClient(ProposalStatus.accepted, null), true);
   });
 
-  it("blocks convert when already linked", () => {
-    assert.equal(canConvertLead(LeadStatus.won, "client-id"), false);
+  it("cannot create client when already converted", () => {
+    assert.equal(canCreateClient(ProposalStatus.accepted, "client-id"), false);
   });
-});
 
-describe("project scope", () => {
-  it("scopes delivery roles", () => {
-    assert.equal(projectListRequiresMembership("product_engineer"), true);
-    assert.equal(projectListRequiresMembership("sales"), false);
+  it("sales blocked from project:create", () => {
+    assert.equal(roleHasPermission("sales", "project:create"), false);
   });
 });

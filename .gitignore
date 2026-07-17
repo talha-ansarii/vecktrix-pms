@@ -41,3 +41,6 @@ next-env.d.ts
 # prisma
 prisma/*.db
 prisma/*.db-journal
+
+# v1→v2 migration backup (local only)
+.migration/

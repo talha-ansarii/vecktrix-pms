@@ -17,6 +17,7 @@ const createTaskSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   assignedToId: z.string().optional(),
+  dueDate: z.string().optional(),
 });
 
 const updateTaskSchema = z.object({
@@ -25,6 +26,7 @@ const updateTaskSchema = z.object({
   description: z.string().optional(),
   status: z.nativeEnum(TaskStatus).optional(),
   assignedToId: z.string().nullable().optional(),
+  dueDate: z.string().optional().nullable(),
 });
 
 const reviewSchema = z.object({
@@ -104,6 +106,7 @@ export async function createTask(data: z.infer<typeof createTaskSchema>) {
   const task = await prisma.task.create({
     data: {
       ...parsed,
+      dueDate: parsed.dueDate ? new Date(parsed.dueDate) : undefined,
       createdById: ctx.userId,
       sortOrder: (lastTask?.sortOrder ?? -1) + 1,
       status: isPm ? TaskStatus.todo : TaskStatus.pending_pm_approval,
@@ -155,7 +158,11 @@ export async function updateTask(data: z.infer<typeof updateTaskSchema>) {
 
   const task = await prisma.task.update({
     where: { id },
-    data: rest,
+    data: {
+      ...rest,
+      dueDate:
+        rest.dueDate === undefined ? undefined : rest.dueDate ? new Date(rest.dueDate) : null,
+    },
   });
 
   revalidatePath(`/projects/${task.projectId}`);

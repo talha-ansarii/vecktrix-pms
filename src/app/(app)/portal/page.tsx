@@ -27,19 +27,6 @@ export default async function PortalPage() {
           {client.projects.map((project) => (
             <div key={project.id}>
               <h2 className="heading-card text-white text-2xl mb-4">{project.name}</h2>
-              {project.planLogs.length > 0 && (
-                <div className="card-dark mb-6">
-                  <h3 className="overline-text text-text-darkSecondary mb-3">Plan updates</h3>
-                  <ul className="space-y-3">
-                    {project.planLogs.map((log) => (
-                      <li key={log.id} className="text-sm border-b border-white/6 pb-2 last:border-0">
-                        <p className="text-text-darkSecondary">{log.summary}</p>
-                        <p className="text-xs text-text-darkSecondary/80 mt-1">{formatDate(log.createdAt)}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
               {project.files.length > 0 && (
                 <div className="card-dark mb-6">
                   <h3 className="overline-text text-text-darkSecondary mb-3">Shared files</h3>
@@ -64,19 +51,19 @@ export default async function PortalPage() {
                   <div key={milestone.id} className="card-dark">
                     <div className="flex items-start justify-between gap-4 mb-3">
                       <div>
-                        <p className="text-xs text-text-darkSecondary">Milestone {milestone.sortOrder}</p>
+                        <p className="text-xs text-text-darkSecondary">Milestone {milestone.sortOrder + 1}</p>
                         <h3 className="text-white font-medium text-lg">{milestone.title}</h3>
-                        {milestone.paymentStatus && (
+                        {milestone.payment && (
                           <p className="text-xs text-text-darkSecondary mt-1">
                             Payment:{" "}
                             <span
                               className={
-                                milestone.paymentStatus === "paid"
+                                milestone.payment.status === "paid"
                                   ? "text-emerald-400"
                                   : "text-amber-300/90"
                               }
                             >
-                              {formatStatus(milestone.paymentStatus)}
+                              {formatStatus(milestone.payment.status)}
                             </span>
                           </p>
                         )}
@@ -102,7 +89,7 @@ export default async function PortalPage() {
                     <ClientMilestonePaymentBlock
                       milestoneTitle={milestone.title}
                       status={milestone.status}
-                      paymentStatus={milestone.paymentStatus}
+                      paymentStatus={milestone.payment?.status ?? null}
                     />
                   </div>
                 ))}

@@ -24,7 +24,7 @@ export default async function LeadsPage({
   const sp = await searchParams;
   const { permissions, workspaceRole } = await getSessionWithPermissions();
   const canWriteLead = roleHasPermission(permissions, "lead:write", workspaceRole);
-  const canConvert = roleHasPermission(permissions, "lead:convert", workspaceRole);
+  const canConvert = workspaceRole === "agency_admin";
 
   const [{ counts }, leads] = await Promise.all([
     getLeadStatusCounts(),
@@ -51,6 +51,7 @@ export default async function LeadsPage({
     createdAt: lead.createdAt.toISOString(),
     convertedClientId: lead.convertedClientId,
     convertedClient: lead.convertedClient,
+    proposal: lead.proposal,
   }));
 
   return (

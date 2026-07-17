@@ -5,9 +5,9 @@ import {
   submitMilestoneForClientReview,
   updateMilestoneStatus,
   overrideMilestone,
-  updatePaymentStatus,
   qaSignOffMilestone,
 } from "@/lib/actions/milestones";
+import { markPaymentPaid } from "@/lib/actions/payments";
 import type { MilestoneStatus } from "@prisma/client";
 
 export function MilestoneActions({
@@ -29,7 +29,6 @@ export function MilestoneActions({
 }) {
   const [pending, startTransition] = useTransition();
   const [overrideNote, setOverrideNote] = useState("");
-  const [paymentStatus, setPaymentStatus] = useState("pending");
 
   if (!canManageMilestones && !canOverride && !canPayment && !canQaSignOff) return null;
 
@@ -97,26 +96,15 @@ export function MilestoneActions({
           </button>
         </div>
       )}
-      {canPayment && (
-        <div className="flex gap-2 flex-wrap items-center">
-          <select
-            value={paymentStatus}
-            onChange={(e) => setPaymentStatus(e.target.value)}
-            className="input-dark text-xs"
-          >
-            <option value="pending">Payment pending</option>
-            <option value="partial">Partial</option>
-            <option value="paid">Paid</option>
-          </select>
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => startTransition(() => { void updatePaymentStatus(milestoneId, paymentStatus); })}
-            className="btn-secondary-dark text-xs py-1.5 px-3"
-          >
-            Update payment
-          </button>
-        </div>
+      {canPayment && status === "completed" && (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => startTransition(() => { void markPaymentPaid(milestoneId); })}
+          className="btn-primary-dark text-xs py-1.5 px-3"
+        >
+          Mark payment paid
+        </button>
       )}
     </div>
   );

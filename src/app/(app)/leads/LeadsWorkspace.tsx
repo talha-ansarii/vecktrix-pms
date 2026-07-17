@@ -6,7 +6,7 @@ import { LeadStatus } from "@prisma/client";
 import { StatusBadge } from "@/components/ui";
 import { formatDate, formatStatus } from "@/lib/utils";
 import { formatMoneyBucket, formatTimelineBucket } from "@/lib/leads/buckets";
-import { canConvertLead } from "@/lib/leads/pipeline";
+import { canCreateClient } from "@/lib/leads/pipeline";
 import { ConvertLeadButton } from "./ConvertLeadButton";
 import { LeadStatusSelect } from "./LeadStatusSelect";
 import { LeadRejectProposalButton } from "./LeadRejectProposalButton";
@@ -28,14 +28,13 @@ export type LeadListItem = {
   createdAt: string;
   convertedClientId: string | null;
   convertedClient: { id: string; name: string } | null;
+  proposal?: { status: string } | null;
 };
 
 const BOARD_COLUMNS: LeadStatus[] = [
   LeadStatus.new,
   LeadStatus.contacted,
   LeadStatus.qualified,
-  LeadStatus.proposal,
-  LeadStatus.won,
   LeadStatus.lost,
 ];
 
@@ -118,12 +117,12 @@ export function LeadsWorkspace({
                             Edit
                           </button>
                           <LeadStatusSelect leadId={lead.id} status={lead.status} />
-                          {col === LeadStatus.proposal && (
+                          {lead.proposal?.status === "sent" && (
                             <LeadRejectProposalButton leadId={lead.id} variant="compact" />
                           )}
                         </div>
                       )}
-                      {canConvert && canConvertLead(lead.status, lead.convertedClientId) && (
+                      {canConvert && canCreateClient(lead.proposal?.status as never, lead.convertedClientId) && (
                           <div className="mt-2">
                             <ConvertLeadButton leadId={lead.id} size="xs" />
                           </div>
@@ -194,7 +193,7 @@ export function LeadsWorkspace({
                       <Link href="/clients" className="text-xs text-emerald-400 hover:underline">
                         View client
                       </Link>
-                    ) : canConvert && canConvertLead(lead.status, lead.convertedClientId) ? (
+                    ) : canConvert && canCreateClient(lead.proposal?.status as never, lead.convertedClientId) ? (
                       <ConvertLeadButton leadId={lead.id} size="xs" />
                     ) : null}
                     </div>

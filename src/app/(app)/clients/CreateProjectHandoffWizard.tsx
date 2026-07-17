@@ -62,7 +62,7 @@ export function CreateProjectHandoffWizard({
     getClientHandoffContext(clientId)
       .then((c) => {
         setCtx(c);
-        const files = c.lead?.files ?? [];
+        const files = c.lead?.proposal?.files ?? [];
         setSelectedFileIds(files.map((f) => f.id));
         const company = c.company ?? c.lead?.company ?? "";
         setProjectName(company ? `${company} — Delivery` : "");
@@ -89,7 +89,7 @@ export function CreateProjectHandoffWizard({
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const leadFiles = ctx?.lead?.files ?? [];
+  const leadFiles = ctx?.lead?.proposal?.files ?? [];
 
   if (!open) {
     return (
@@ -152,7 +152,7 @@ export function CreateProjectHandoffWizard({
                     description: projectDescription.trim() || undefined,
                     startDate: projectStartDate || undefined,
                     milestones: milestones.map((m, i) => ({ ...m, sortOrder: i + 1 })),
-                    leadFileIds: selectedFileIds,
+                    proposalFileIds: selectedFileIds,
                     assignPmUserId: assignPmUserId || undefined,
                   });
                   setOpen(false);

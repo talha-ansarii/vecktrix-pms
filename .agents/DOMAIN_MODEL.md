@@ -1,9 +1,14 @@
-# Domain Model
+# Domain Model — v2
 
 ## Enums / statuses
 
 ### LeadStatus
-`new` → `contacted` → `qualified` → `proposal` → `won` | `lost` | `archived`
+`new` → `contacted` → `qualified` | `lost` | `archived`
+
+Proposal lifecycle is a **separate** `Proposal` entity — not a lead stage.
+
+### ProposalStatus
+`draft` → `sent` → `accepted` | `rejected`
 
 ### LeadTemperature
 `hot` | `warm` | `cold`
@@ -23,7 +28,7 @@
 ### WorkspaceRole
 `agency_admin` | `sales` | `project_manager` | `ux_designer` | `product_engineer` | `qa_engineer` | `client`
 
-### Default milestones (order 1–5)
+### Default proposal milestones (order 0–4)
 
 1. Requirements gathering — `project_manager`
 2. Design — `ux_designer`
@@ -36,45 +41,55 @@
 - Workspace
 - User (+ Auth Account/Session)
 - WorkspaceMember (userId, workspaceId, role)
-- Lead (+ LeadActivity)
+- **Lead** (+ **Contact** many-to-one)
+- **Proposal** (+ ProposalMilestone, ProposalFile) — one per lead
+- **ActivityLog** — unified audit trail (replaces LeadActivity / ProjectActivity)
 - Client (+ ClientUser link)
-- Project (+ ProjectMember, ProjectFile, ProjectPlanLog, ProjectPlanClientNote)
-- Milestone (+ MilestoneReview)
-- Task (+ TaskReview, TaskComment, TimeEntry)
+- Project (+ ProjectMember, ProjectFile, ProjectPlanClientNote)
+- Milestone (+ MilestoneReview, optional `dueDate`)
+- Task (+ TaskReview, TaskComment, TimeEntry, optional `dueDate`)
+- **Payment** — manual payment record per milestone; Admin marks paid
 - Notification
 - Invite
 
-## Convert Lead → Client
+## Sales workflow
 
-Allowed from `qualified`, `proposal`, or `won` (if not already converted). Creates Client, sets `Lead.convertedClientId`. **Does not create a Project.** Lead timeline and `LeadFile` rows stay on the lead.
+Sales manages **leads** and **contacts** only. They cannot create clients or projects.
+
+## Admin: Proposal → Client
+
+1. Admin builds proposal on lead detail (milestones, files, notes).
+2. Send proposal → client decision.
+3. On **accepted**, Admin uses **Convert → Client** (`createClientFromProposal`).
+4. Sets `Lead.convertedClientId`; lead stays `qualified`.
 
 ## Client → Project handoff
 
-Explicit PM/Sales action from the client card: **Create project & share proposals** wizard (`createDraftProjectFromClient`).
+Admin action from client card: **Create project & share proposals** wizard (`createDraftProjectFromClient`).
 
 - New projects start **draft** (`publishedToClient = false`).
-- Optional `Project.sourceLeadId`; selected `LeadFile` rows promote to `ProjectFile` (same `url`/`storageKey`, `sourceLeadFileId`, default `clientVisible: true`).
+- Optional `Project.sourceLeadId`; selected `ProposalFile` rows promote to `ProjectFile`.
 - Milestones seeded from wizard (default five), all **`locked`** until publish activates milestone 1.
 
 ## Publish to client portal
 
-- **Publish** (`publishProjectToClient`): requires ≥1 milestone and ≥1 `ProjectFile` with `clientVisible: true`; sets `publishedToClient`, activates milestone 1 if locked; client-visible `ProjectPlanLog`.
-- **Unpublish** hides project from portal again; client-visible log entry.
+- **Publish** (`publishProjectToClient`): requires ≥1 milestone and ≥1 `ProjectFile` with `clientVisible: true`; sets `publishedToClient`, activates milestone 1 if locked.
+- **Unpublish** hides project from portal again.
 - Portal query returns only `publishedToClient: true` projects.
 
 ## Plan changes after publish
 
-Agency may edit milestone plan fields (`updateMilestonePlan`); changes after first publish log to **client-visible** `ProjectPlanLog`. Clients may submit **plan concern** notes (`ProjectPlanClientNote`) — separate from milestone delivery review.
+Agency may edit milestone plan fields (`updateMilestonePlan`); changes after first publish log to **client-visible** `ActivityLog`. Clients may submit **plan concern** notes (`ProjectPlanClientNote`).
 
 ## Sequential tasks
 
 Within a milestone, tasks ordered by `sortOrder`. Next unlocks when previous is `approved`. PM may force-unlock with audit note.
 
-## Whiteboard lifecycle (Phase 7)
+## Whiteboard lifecycle
 
 See `.agents/WHITEBOARD_WORKFLOW.md`. Key runtime rules:
 
-- **Sales** — leads/clients only; no project list.
+- **Sales** — leads/contacts only; no project list.
 - **Delivery roles** — projects filtered by `ProjectMember`.
 - **QA sign-off** (`qaSignedOffAt`) required before client milestone review.
-- **Payment** — next milestone unlocks only when completed milestone `paymentStatus` is `paid`.
+- **Payment** — next milestone unlocks only when completed milestone has `Payment.status = paid` (Admin marks paid manually).

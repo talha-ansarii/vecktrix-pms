@@ -12,6 +12,7 @@ import {
 } from "@/lib/actions/tasks";
 import { logTimeEntry } from "@/lib/actions/time";
 import { StatusBadge } from "@/components/ui";
+import { DeadlineBadge } from "@/components/DeadlineBadge";
 import type { TaskStatus } from "@prisma/client";
 
 type TaskItem = {
@@ -20,6 +21,7 @@ type TaskItem = {
   status: TaskStatus;
   clientVisible: boolean;
   sortOrder: number;
+  dueDate?: Date | string | null;
   forceUnlocked?: boolean;
   comments?: { id: string; content: string; author: string }[];
   reviews?: { id: string; status: string; feedback: string | null; round: number }[];
@@ -71,7 +73,10 @@ export function MilestoneTaskPanel({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-sm text-white">{task.title}</p>
-                  <p className="text-xs text-text-darkSecondary">#{task.sortOrder + 1}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <p className="text-xs text-text-darkSecondary">#{task.sortOrder + 1}</p>
+                    <DeadlineBadge dueDate={task.dueDate} />
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
                   {task.clientVisible && <span className="text-xs text-emerald-400">client visible</span>}
@@ -258,6 +263,7 @@ export function MilestoneTaskPanel({
                 milestoneId,
                 title: fd.get("title") as string,
                 description: (fd.get("description") as string) || undefined,
+                dueDate: (fd.get("dueDate") as string) || undefined,
               });
               e.currentTarget.reset();
             });
@@ -266,6 +272,7 @@ export function MilestoneTaskPanel({
           <p className="overline-text text-text-darkSecondary">Add task</p>
           <input name="title" required placeholder="Task title" className="input-dark" />
           <input name="description" placeholder="Description (optional)" className="input-dark" />
+          <input name="dueDate" type="date" className="input-dark" aria-label="Due date" />
           <button type="submit" disabled={pending} className="btn-secondary-dark text-sm px-3 py-1.5">
             {pending ? "Saving…" : "Create task"}
           </button>

@@ -33,7 +33,7 @@ export async function AppShell({
   try {
     const ctx = await getSessionContext();
     workspaceName = ctx.workspace.name;
-    const permissions = await getUserPermissions(ctx.userId, ctx.workspaceId);
+    const permissions = getUserPermissions(ctx.workspaceRole);
     navAccess = {
       permissions: [...permissions],
       workspaceRole: ctx.workspaceRole,

@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { PageHeader, StatusBadge, ForbiddenState } from "@/components/ui";
-import { getProject, listAssignableMembers, getProjectPublishEligibility } from "@/lib/actions/projects";
+import { DeadlineBadge } from "@/components/DeadlineBadge";
+import { getProject, listAssignableMembers, getProjectPublishEligibility, getProjectActivity } from "@/lib/actions/projects";
 import { getSessionWithPermissions, roleHasPermission, tryAssertPermission } from "@/lib/rbac";
 import { formatStatus, formatDate } from "@/lib/utils";
 import { notFound } from "next/navigation";
@@ -22,11 +23,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     );
   }
 
-  const [project, assignable, session, publishState] = await Promise.all([
+  const [project, assignable, session, publishState, activities] = await Promise.all([
     getProject(id).catch(() => null),
     listAssignableMembers().catch(() => []),
     getSessionWithPermissions(),
     getProjectPublishEligibility(id).catch(() => null),
+    getProjectActivity(id).catch(() => []),
   ]);
   if (!project) notFound();
 
@@ -43,17 +45,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
   };
 
   const activityFeed = [
-    ...project.planLogs.map((log) => ({
-      id: `log-${log.id}`,
-      at: log.createdAt,
-      title: log.summary,
-      meta: [
-        log.actor ? (log.actor.name ?? log.actor.email) : null,
-        !log.clientVisible ? "internal" : null,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      tone: "default" as const,
+    ...activities.map((a) => ({
+      id: a.id,
+      at: a.createdAt,
+      title: a.content,
+      meta: a.actor ? (a.actor.name ?? a.actor.email) : "System",
+      tone: "delivery" as const,
     })),
     ...project.planClientNotes.map((note) => ({
       id: `note-${note.id}`,
@@ -62,13 +59,6 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
       meta: `${note.user.name ?? note.user.email}`,
       body: note.content,
       tone: "client" as const,
-    })),
-    ...project.activities.map((a) => ({
-      id: `act-${a.id}`,
-      at: a.createdAt,
-      title: a.content,
-      meta: a.user ? (a.user.name ?? a.user.email) : "System",
-      tone: "delivery" as const,
     })),
   ].sort((a, b) => b.at.getTime() - a.at.getTime());
 
@@ -113,10 +103,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                     title={milestone.title}
                     sortOrder={milestone.sortOrder}
                     ownerRole={milestone.ownerRole}
+                    dueDate={milestone.dueDate}
                     canEdit={caps.canManageMilestones}
                   />
                 </div>
-                <StatusBadge status={milestone.status} />
+                <div className="flex flex-col items-end gap-2">
+                  <DeadlineBadge dueDate={milestone.dueDate} />
+                  <StatusBadge status={milestone.status} />
+                </div>
               </div>
 
               <MilestoneTaskPanel
@@ -130,6 +124,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                   status: t.status,
                   clientVisible: t.clientVisible,
                   sortOrder: t.sortOrder,
+                  dueDate: t.dueDate,
                   forceUnlocked: t.forceUnlocked,
                   comments: t.comments.map((c) => ({
                     id: c.id,

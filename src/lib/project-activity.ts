@@ -1,22 +1,28 @@
-import { prisma } from "@/lib/prisma";
-import type { Prisma } from "@prisma/client";
+import { writeLog } from "@/domain/audit/log";
 
 export async function appendProjectActivity(
   projectId: string,
-  data: {
+  opts: {
     actorUserId?: string | null;
     type: string;
     content: string;
-    metadata?: Prisma.InputJsonValue;
+    metadata?: Record<string, unknown>;
+    workspaceId?: string;
   },
 ) {
-  return prisma.projectActivity.create({
-    data: {
-      projectId,
-      userId: data.actorUserId ?? null,
-      type: data.type,
-      content: data.content,
-      metadata: data.metadata,
-    },
+  const { prisma } = await import("@/lib/prisma");
+  const project = await prisma.project.findUniqueOrThrow({
+    where: { id: projectId },
+    select: { workspaceId: true },
+  });
+
+  return writeLog({
+    workspaceId: opts.workspaceId ?? project.workspaceId,
+    entityType: "project",
+    entityId: projectId,
+    action: opts.type,
+    content: opts.content,
+    actorUserId: opts.actorUserId,
+    metadata: opts.metadata as import("@prisma/client").Prisma.InputJsonValue | undefined,
   });
 }

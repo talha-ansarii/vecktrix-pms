@@ -2,31 +2,34 @@
 
 Long-running context for AI agents implementing the Vecktrix Agency Project Management System. **Read these files at the start of every session.**
 
-## Session Protocol
+## Session Protocol (v2 rewrite — branch `pms-v2`)
 
 **At the start of every prompt/session:**
-1. Read `SESSION_HANDOFF.md` — what happened last session
-2. Read `IMPLEMENTATION_TODO.md` — checkbox progress
-3. Skim `PHASES.md` — which phase we're in
+1. Read `CURRENT_CONTEXT.md` — active micro-phase and blockers
+2. Read `TODO_V2_REWRITE.md` — find the single `[~] in_progress` micro-phase
+3. Implement ONLY that micro-phase scope (≤8 files, one concern)
 4. Reference `DESIGN_SYSTEM.md` before any UI work
-5. Reference other files as needed for the current task
 
-**At the end of every implementation session (or when user asks for phase/status update):**
-1. Update `SESSION_HANDOFF.md` — completed work, next steps, blockers
-2. Update `IMPLEMENTATION_TODO.md` — check/uncheck items
-3. Update `PHASES.md` if a phase completed or scope shifted
-4. Update `DECISIONS.md` if new ADR
-5. Update `OPEN_QUESTIONS.md` if product decisions resolved
+**At the end of every prompt:**
+1. Mark completed checkboxes in `TODO_V2_REWRITE.md`
+2. Set next micro-phase to `[~] in_progress` (only one)
+3. Rewrite `CURRENT_CONTEXT.md` entirely
+4. Note spec drift in `CURRENT_CONTEXT.md` if schema/RBAC changed
 
-**Also update `IMPLEMENTATION_TODO.md` mid-session** when a user prompt changes requirements.
+**Legacy v1 files** (`SESSION_HANDOFF.md`, `IMPLEMENTATION_TODO.md`) — archive only; do not edit during v2 rewrite.
+
+**User prompt:** `Run MP-X.Y` or `Continue PMS v2 rewrite`
 
 ## File Index
 
 | File | Purpose |
 |------|---------|
-| [PHASES.md](./PHASES.md) | High-level phase roadmap |
-| [IMPLEMENTATION_TODO.md](./IMPLEMENTATION_TODO.md) | Living checkbox backlog |
-| [SESSION_HANDOFF.md](./SESSION_HANDOFF.md) | Live session notes |
+| [CURRENT_CONTEXT.md](./CURRENT_CONTEXT.md) | **v2** active micro-phase + next prompt |
+| [TODO_V2_REWRITE.md](./TODO_V2_REWRITE.md) | **v2** 52 micro-phase checkbox backlog |
+| [WHITEBOARD_WORKFLOW.md](./WHITEBOARD_WORKFLOW.md) | Canonical whiteboard spec |
+| [PHASES.md](./PHASES.md) | High-level phase roadmap (v1 archive) |
+| [IMPLEMENTATION_TODO.md](./IMPLEMENTATION_TODO.md) | v1 backlog (archive) |
+| [SESSION_HANDOFF.md](./SESSION_HANDOFF.md) | v1 session notes (archive) |
 | [PRD.md](./PRD.md) | Product requirements |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Stack, folders, constraints |
 | [DESIGN_SYSTEM.md](./DESIGN_SYSTEM.md) | Vecktrix visual DNA for PMS UI |

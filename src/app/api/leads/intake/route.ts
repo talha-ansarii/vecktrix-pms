@@ -4,6 +4,7 @@ import { LeadSource, LeadTemperature, ServiceInterest } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { rateLimitOrThrow, clientIpFromHeaders } from "@/lib/rate-limit";
 import { notifyWorkspaceRole } from "@/lib/notifications/events";
+import { writeLog } from "@/domain/audit/log";
 import { sendEmail } from "@/lib/email/send";
 
 const intakeSchema = z.object({
@@ -68,12 +69,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await prisma.leadActivity.create({
-      data: {
-        leadId: lead.id,
-        type: "intake",
-        content: "Lead received via website intake API",
-      },
+    await writeLog({
+      workspaceId: workspace.id,
+      entityType: "lead",
+      entityId: lead.id,
+      action: "created",
+      content: "Lead received via website intake API",
     });
 
     await notifyWorkspaceRole({

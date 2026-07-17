@@ -13,8 +13,6 @@ enum LeadStatus {
   new
   contacted
   qualified
-  proposal
-  won
   lost
   archived
 }
@@ -51,6 +49,13 @@ enum ServiceInterest {
   SaaS_MVP
   Extension
   Other
+}
+
+enum ProposalStatus {
+  draft
+  sent
+  accepted
+  rejected
 }
 
 enum MilestoneStatus {
@@ -102,6 +107,11 @@ enum InviteStatus {
   revoked
 }
 
+enum PaymentStatus {
+  pending
+  paid
+}
+
 enum NotificationType {
   lead
   project
@@ -109,6 +119,18 @@ enum NotificationType {
   task
   invite
   system
+  proposal
+}
+
+enum ActivityEntityType {
+  lead
+  contact
+  proposal
+  client
+  project
+  milestone
+  task
+  payment
 }
 
 // ─── Workspace & Auth ────────────────────────────────────────────────────────
@@ -121,46 +143,44 @@ model Workspace {
   updatedAt DateTime @updatedAt
 
   members       WorkspaceMember[]
-  roles         Role[]
-  userRoles     UserRole[]
   invites       Invite[]
   leads         Lead[]
   clients       Client[]
   projects      Project[]
   notifications Notification[]
+  activityLogs  ActivityLog[]
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified DateTime?
-  image         String?
+  id             String    @id @default(cuid())
+  name           String?
+  email          String    @unique
+  emailVerified  DateTime?
+  image          String?
   hashedPassword String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  accounts          Account[]
-  sessions          Session[]
-  workspaceMembers  WorkspaceMember[]
-  userRoles         UserRole[]
-  invitesSent       Invite[]          @relation("InvitedBy")
-  leadsAssigned     Lead[]            @relation("LeadAssignee")
-  leadActivities    LeadActivity[]
-  leadFiles         LeadFile[]        @relation("LeadFileUploader")
-  clients           Client[]
-  projectMembers    ProjectMember[]
-  tasksAssigned     Task[]            @relation("TaskAssignee")
-  tasksCreated      Task[]            @relation("TaskCreator")
-  taskReviews       TaskReview[]
-  taskComments      TaskComment[]
-  milestoneReviews  MilestoneReview[]
-  timeEntries       TimeEntry[]
-  notifications     Notification[]
-  projectFiles      ProjectFile[]     @relation("FileUploader")
-  projectPlanLogs     ProjectPlanLog[]
-  projectPlanNotes    ProjectPlanClientNote[]
-  projectActivities   ProjectActivity[]
+  accounts         Account[]
+  sessions         Session[]
+  workspaceMembers WorkspaceMember[]
+  invitesSent      Invite[]          @relation("InvitedBy")
+  leadsAssigned    Lead[]            @relation("LeadAssignee")
+  contactsCreated  Contact[]
+  proposalFiles    ProposalFile[]    @relation("ProposalFileUploader")
+  clients          Client[]
+  projectMembers   ProjectMember[]
+  tasksAssigned    Task[]            @relation("TaskAssignee")
+  tasksCreated     Task[]            @relation("TaskCreator")
+  taskReviews      TaskReview[]
+  taskComments     TaskComment[]
+  milestoneReviews MilestoneReview[]
+  timeEntries      TimeEntry[]
+  notifications    Notification[]
+  projectFiles     ProjectFile[]     @relation("FileUploader")
+  planClientNotes  ProjectPlanClientNote[]
+  paymentsMarked   Payment[]         @relation("PaymentMarkedBy")
+  activityLogs     ActivityLog[]
 }
 
 model Account {
@@ -199,8 +219,6 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-// ─── RBAC ───────────────────────────────────────────────────────────────────
-
 model WorkspaceMember {
   id          String        @id @default(cuid())
   userId      String
@@ -214,52 +232,6 @@ model WorkspaceMember {
 
   @@unique([userId, workspaceId])
   @@index([workspaceId])
-}
-
-model Role {
-  id          String  @id @default(cuid())
-  workspaceId String
-  name        String
-  slug        String
-  description String?
-
-  workspace       Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  rolePermissions RolePermission[]
-  userRoles       UserRole[]
-
-  @@unique([workspaceId, slug])
-}
-
-model Permission {
-  id          String @id @default(cuid())
-  key         String @unique
-  description String?
-
-  rolePermissions RolePermission[]
-}
-
-model UserRole {
-  id          String @id @default(cuid())
-  userId      String
-  roleId      String
-  workspaceId String
-
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, roleId, workspaceId])
-}
-
-model RolePermission {
-  id           String @id @default(cuid())
-  roleId       String
-  permissionId String
-
-  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-
-  @@unique([roleId, permissionId])
 }
 
 model Invite {
@@ -280,7 +252,27 @@ model Invite {
   @@index([email, workspaceId])
 }
 
-// ─── Leads ────────────────────────────────────────────────────────────────────
+// ─── Unified audit ────────────────────────────────────────────────────────────
+
+model ActivityLog {
+  id          String             @id @default(cuid())
+  workspaceId String
+  entityType  ActivityEntityType
+  entityId    String
+  action      String
+  content     String             @db.Text
+  metadata    Json?
+  actorUserId String?
+  createdAt   DateTime           @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor     User?     @relation(fields: [actorUserId], references: [id])
+
+  @@index([workspaceId, entityType, entityId, createdAt])
+  @@index([entityType, entityId])
+}
+
+// ─── Leads & Contacts ─────────────────────────────────────────────────────────
 
 model Lead {
   id                String           @id @default(cuid())
@@ -301,34 +293,70 @@ model Lead {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
-  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  convertedClient Client?        @relation("LeadConversion", fields: [convertedClientId], references: [id])
-  assignedTo      User?          @relation("LeadAssignee", fields: [assignedToId], references: [id])
-  activities      LeadActivity[]
-  files           LeadFile[]
+  workspace       Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  convertedClient Client?   @relation("LeadConversion", fields: [convertedClientId], references: [id])
+  assignedTo      User?     @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  contacts        Contact[]
+  proposal        Proposal?
 
   @@index([workspaceId, status])
   @@index([email, workspaceId])
 }
 
-model LeadActivity {
-  id             String      @id @default(cuid())
-  leadId         String
-  userId         String?
-  type           String
-  content        String      @db.Text
-  pipelineStatus LeadStatus?
-  createdAt      DateTime    @default(now())
+model Contact {
+  id          String   @id @default(cuid())
+  leadId      String
+  name        String
+  email       String?
+  phone       String?
+  title       String?
+  isPrimary   Boolean  @default(false)
+  notes       String?  @db.Text
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  lead Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  user User? @relation(fields: [userId], references: [id])
+  lead      Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdById], references: [id])
 
   @@index([leadId])
 }
 
-model LeadFile {
+// ─── Proposals ────────────────────────────────────────────────────────────────
+
+model Proposal {
+  id        String         @id @default(cuid())
+  leadId    String         @unique
+  status    ProposalStatus @default(draft)
+  notes     String?        @db.Text
+  sentAt    DateTime?
+  decidedAt DateTime?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  lead       Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  milestones ProposalMilestone[]
+  files      ProposalFile[]
+}
+
+model ProposalMilestone {
+  id         String        @id @default(cuid())
+  proposalId String
+  title      String
+  sortOrder  Int
+  ownerRole  WorkspaceRole
+  amount     Float?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  proposal Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+
+  @@index([proposalId, sortOrder])
+}
+
+model ProposalFile {
   id           String   @id @default(cuid())
-  leadId       String
+  proposalId   String
   name         String
   url          String
   storageKey   String
@@ -337,10 +365,10 @@ model LeadFile {
   uploadedById String
   createdAt    DateTime @default(now())
 
-  lead       Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  uploadedBy User @relation("LeadFileUploader", fields: [uploadedById], references: [id])
+  proposal   Proposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  uploadedBy User     @relation("ProposalFileUploader", fields: [uploadedById], references: [id])
 
-  @@index([leadId])
+  @@index([proposalId])
 }
 
 // ─── Clients ──────────────────────────────────────────────────────────────────
@@ -379,21 +407,20 @@ model Project {
   publishedAt       DateTime?
   unpublishedAt     DateTime?
   sourceLeadId      String?
+  sourceProposalId  String?
   startDate         DateTime?
   endDate           DateTime?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
-  workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  client    Client          @relation(fields: [clientId], references: [id])
-  members   ProjectMember[]
-  milestones Milestone[]
-  tasks     Task[]
-  timeEntries TimeEntry[]
-  files     ProjectFile[]
-  planLogs  ProjectPlanLog[]
+  workspace       Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client          Client                  @relation(fields: [clientId], references: [id])
+  members         ProjectMember[]
+  milestones      Milestone[]
+  tasks           Task[]
+  timeEntries     TimeEntry[]
+  files           ProjectFile[]
   planClientNotes ProjectPlanClientNote[]
-  activities ProjectActivity[]
 
   @@index([workspaceId])
   @@index([clientId])
@@ -422,7 +449,7 @@ model Milestone {
   sortOrder     Int
   status        MilestoneStatus @default(locked)
   ownerRole     WorkspaceRole
-  paymentStatus String?
+  dueDate       DateTime?
   qaSignedOffAt DateTime?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
@@ -431,6 +458,7 @@ model Milestone {
   tasks    Task[]
   reviews  MilestoneReview[]
   files    ProjectFile[]
+  payment  Payment?
 
   @@index([projectId, sortOrder])
 }
@@ -449,6 +477,20 @@ model MilestoneReview {
   @@index([milestoneId])
 }
 
+model Payment {
+  id         String        @id @default(cuid())
+  milestoneId String       @unique
+  amount     Float?
+  status     PaymentStatus @default(pending)
+  paidAt     DateTime?
+  markedById String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  milestone Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  markedBy  User?     @relation("PaymentMarkedBy", fields: [markedById], references: [id])
+}
+
 // ─── Tasks ────────────────────────────────────────────────────────────────────
 
 model Task {
@@ -459,6 +501,7 @@ model Task {
   description   String?    @db.Text
   status        TaskStatus @default(draft)
   sortOrder     Int        @default(0)
+  dueDate       DateTime?
   assignedToId  String?
   createdById   String
   clientVisible Boolean    @default(false)
@@ -467,10 +510,10 @@ model Task {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
-  milestone   Milestone    @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
-  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  assignedTo  User?        @relation("TaskAssignee", fields: [assignedToId], references: [id])
-  createdBy   User         @relation("TaskCreator", fields: [createdById], references: [id])
+  milestone   Milestone     @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedTo  User?         @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  createdBy   User          @relation("TaskCreator", fields: [createdById], references: [id])
   reviews     TaskReview[]
   comments    TaskComment[]
   timeEntries TimeEntry[]
@@ -525,21 +568,21 @@ model TimeEntry {
   @@index([userId])
 }
 
-// ─── Notifications ────────────────────────────────────────────────────────────
+// ─── Files & notifications ─────────────────────────────────────────────────────
 
 model ProjectFile {
-  id               String   @id @default(cuid())
-  projectId        String
-  milestoneId      String?
-  name             String
-  url              String
-  storageKey       String
-  mimeType         String
-  size             Int
-  clientVisible    Boolean  @default(false)
-  sourceLeadFileId String?  @unique
-  uploadedById     String
-  createdAt        DateTime @default(now())
+  id                String   @id @default(cuid())
+  projectId         String
+  milestoneId       String?
+  name              String
+  url               String
+  storageKey        String
+  mimeType          String
+  size              Int
+  clientVisible     Boolean  @default(false)
+  sourceProposalFileId String? @unique
+  uploadedById      String
+  createdAt         DateTime @default(now())
 
   project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   milestone  Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
@@ -549,50 +592,15 @@ model ProjectFile {
   @@index([milestoneId])
 }
 
-model ProjectPlanLog {
-  id            String   @id @default(cuid())
-  projectId     String
-  actorUserId   String?
-  type          String
-  summary       String   @db.Text
-  metadata      Json?
-  clientVisible Boolean  @default(true)
-  createdAt     DateTime @default(now())
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  actor   User?   @relation(fields: [actorUserId], references: [id])
-
-  planClientNotes ProjectPlanClientNote[]
-
-  @@index([projectId, createdAt])
-}
-
 model ProjectPlanClientNote {
   id        String   @id @default(cuid())
   projectId String
   userId    String
   content   String   @db.Text
-  planLogId String?
-  createdAt DateTime @default(now())
-
-  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User            @relation(fields: [userId], references: [id])
-  planLog ProjectPlanLog? @relation(fields: [planLogId], references: [id], onDelete: SetNull)
-
-  @@index([projectId, createdAt])
-}
-
-model ProjectActivity {
-  id        String   @id @default(cuid())
-  projectId String
-  userId    String?
-  type      String
-  content   String   @db.Text
-  metadata  Json?
   createdAt DateTime @default(now())
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User?   @relation(fields: [userId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
 
   @@index([projectId, createdAt])
 }

@@ -18,12 +18,14 @@ export function MilestonePlanEditor({
   title,
   sortOrder,
   ownerRole,
+  dueDate,
   canEdit,
 }: {
   milestoneId: string;
   title: string;
   sortOrder: number;
   ownerRole: WorkspaceRole;
+  dueDate?: Date | string | null;
   canEdit: boolean;
 }) {
   const [editing, setEditing] = useState(false);
@@ -33,6 +35,9 @@ export function MilestonePlanEditor({
   const [draftTitle, setDraftTitle] = useState(title);
   const [draftOrder, setDraftOrder] = useState(sortOrder);
   const [draftOwner, setDraftOwner] = useState(ownerRole);
+  const [draftDueDate, setDraftDueDate] = useState(
+    dueDate ? new Date(dueDate).toISOString().slice(0, 10) : "",
+  );
 
   if (!canEdit) {
     return (
@@ -57,6 +62,7 @@ export function MilestonePlanEditor({
               setDraftTitle(title);
               setDraftOrder(sortOrder);
               setDraftOwner(ownerRole);
+              setDraftDueDate(dueDate ? new Date(dueDate).toISOString().slice(0, 10) : "");
               setEditing(true);
             }}
           >
@@ -98,6 +104,15 @@ export function MilestonePlanEditor({
             </option>
           ))}
         </select>
+        <label className="text-xs text-text-darkSecondary">
+          Due date
+          <input
+            type="date"
+            value={draftDueDate}
+            onChange={(e) => setDraftDueDate(e.target.value)}
+            className="input-dark ml-2"
+          />
+        </label>
       </div>
       {error && <p className="text-sm text-red-400">{error}</p>}
       <div className="flex gap-2">
@@ -114,6 +129,7 @@ export function MilestonePlanEditor({
                   title: draftTitle,
                   sortOrder: draftOrder,
                   ownerRole: draftOwner,
+                  dueDate: draftDueDate || null,
                 });
                 setEditing(false);
                 router.refresh();

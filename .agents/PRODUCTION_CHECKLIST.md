@@ -1,4 +1,4 @@
-# Production Checklist
+# Production Checklist — v2
 
 Use this before deploying Vecktrix PMS to production.
 
@@ -14,16 +14,18 @@ Use this before deploying Vecktrix PMS to production.
 
 ## Database
 
-- [ ] `npm run db:push` applied to production database
-- [ ] `npm run db:seed` run once on fresh production DB
+- [ ] **v1 → v2 upgrade with existing data:** run in order:
+  1. `npm run db:pre-migrate` (writes `.migration/v1-backup.json`, fixes lead statuses, drops legacy tables)
+  2. `npm run db:push -- --accept-data-loss`
+  3. `npm run db:post-migrate` (restores proposals, files, activity, payments from JSON backup)
+- [ ] **Fresh database:** `npm run db:push` then `npm run db:seed`
 - [ ] Admin password changed from default `Admin123!`
-- [ ] Prisma migrations strategy decided (currently `db push` for v1)
 
 ## Security
 
 - [ ] HTTPS enforced (Vercel default)
 - [ ] Intake API secret rotated from dev value
-- [ ] RBAC verified: client role cannot access task review/comment
+- [ ] RBAC verified: Sales cannot create client/project; client role cannot access task review/comment
 - [ ] Row-level isolation tested for client portal
 - [ ] Rate limiting on intake endpoints (Vercel WAF or middleware)
 - [ ] bcrypt cost factor appropriate (12 in seed)
@@ -52,19 +54,29 @@ Use this before deploying Vecktrix PMS to production.
 ## Deployment (Vercel)
 
 - [ ] Build succeeds: `npm run build`
+- [ ] Unit tests pass: `npm run test:unit`
 - [ ] Environment variables set in Vercel dashboard
 - [ ] Custom domain configured
 - [ ] `postinstall` runs `prisma generate`
+- [ ] Deploy branch `pms-v2` (or merge to main)
 
-## Post-deploy smoke test
+## Post-deploy smoke test (v2 whiteboard path)
 
 - [ ] Login with admin credentials
 - [ ] Dashboard loads with stats
-- [ ] Create lead → convert to client → **handoff wizard** → publish → client portal sees project
-- [ ] Proposal file on qualified lead moves to **proposal** stage
+- [ ] **Sales** user can create lead + contacts but cannot convert client or open projects
+- [ ] **Admin** creates proposal on lead → edit milestones → send → mark accepted
+- [ ] Admin converts accepted proposal → **client**
+- [ ] Admin runs **handoff wizard** → draft project with PM assigned
+- [ ] PM adds team members; tasks with due dates show deadline badges
+- [ ] Publish project → client portal sees project
 - [ ] QA sign-off required before client milestone review
-- [ ] Milestone **paid** unlocks next milestone
+- [ ] Admin **marks payment paid** → next milestone unlocks
 - [ ] Delivery user sees only **assigned** projects
-- [ ] 5 milestones appear on new project (draft: all locked until publish)
 - [ ] Client portal shows only client-visible tasks
 - [ ] Intake API returns `{ id, created }` with valid secret
+- [ ] Activity timeline shows unified `ActivityLog` entries on lead detail
+
+## Automated checks
+
+- [ ] `npm run test:e2e` (requires `DATABASE_URL` + seeded DB)

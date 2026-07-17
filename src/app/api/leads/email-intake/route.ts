@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { LeadSource, LeadTemperature } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { writeLog } from "@/domain/audit/log";
 import { rateLimitOrThrow, clientIpFromHeaders } from "@/lib/rate-limit";
 
 const emailIntakeSchema = z.object({
@@ -61,12 +62,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    await prisma.leadActivity.create({
-      data: {
-        leadId: lead.id,
-        type: "email_intake",
-        content: `Email lead: ${parsed.subject ?? "(no subject)"}`,
-      },
+    await writeLog({
+      workspaceId: workspace.id,
+      entityType: "lead",
+      entityId: lead.id,
+      action: "created",
+      content: `Email lead: ${parsed.subject ?? "(no subject)"}`,
     });
 
     return NextResponse.json({ id: lead.id, created: true }, { status: 201 });

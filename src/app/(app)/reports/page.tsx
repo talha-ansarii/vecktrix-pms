@@ -22,8 +22,8 @@ export default async function ReportsPage() {
   ]);
 
   const totalHours = timeSummary.reduce((sum, r) => sum + r.totalHours, 0);
-  const wonLeads = leads.filter((l) => l.status === "won").length;
-  const conversionRate = leads.length > 0 ? Math.round((wonLeads / leads.length) * 100) : 0;
+  const convertedLeads = leads.filter((l) => l.convertedClientId).length;
+  const conversionRate = leads.length > 0 ? Math.round((convertedLeads / leads.length) * 100) : 0;
 
   return (
     <AppShell currentPath="/reports">
@@ -36,7 +36,7 @@ export default async function ReportsPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
         <StatCard label="Total Hours" value={totalHours.toFixed(1)} />
         <StatCard label="Active Projects" value={projects.filter((p) => p.status === "active").length} />
-        <StatCard label="Lead Conversion" value={`${conversionRate}%`} sub={`${wonLeads} won`} />
+        <StatCard label="Lead Conversion" value={`${conversionRate}%`} sub={`${convertedLeads} clients`} />
       </div>
 
       <div className="card-dark">

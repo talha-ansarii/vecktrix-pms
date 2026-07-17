@@ -1,10 +1,16 @@
 "use client";
 
-import { LeadStatus } from "@prisma/client";
+import { LeadStatus, ProposalStatus } from "@prisma/client";
 import { cn, formatStatus } from "@/lib/utils";
-import { LEAD_PIPELINE_STAGES, LEAD_TERMINAL_STAGES, pipelineStageLabel } from "@/lib/leads/pipeline";
+import { LEAD_PIPELINE_STAGES, LEAD_TERMINAL_STAGES, pipelineStageLabel, proposalStageLabel } from "@/lib/leads/pipeline";
 
-export function LeadPipelineBar({ currentStatus }: { currentStatus: LeadStatus }) {
+export function LeadPipelineBar({
+  currentStatus,
+  proposalStatus,
+}: {
+  currentStatus: LeadStatus;
+  proposalStatus?: ProposalStatus;
+}) {
   const terminal = LEAD_TERMINAL_STAGES.includes(currentStatus);
   const currentIndex = LEAD_PIPELINE_STAGES.indexOf(currentStatus);
 
@@ -13,6 +19,11 @@ export function LeadPipelineBar({ currentStatus }: { currentStatus: LeadStatus }
       <p className="text-xs font-semibold uppercase tracking-wider text-text-darkSecondary mb-4">
         Pipeline journey
       </p>
+      {proposalStatus && (
+        <p className="text-sm text-white mb-3">
+          Proposal: <span className="font-medium">{proposalStageLabel(proposalStatus)}</span>
+        </p>
+      )}
       {terminal ? (
         <p className="text-sm text-white">
           Current stage: <span className="font-medium">{pipelineStageLabel(currentStatus)}</span>

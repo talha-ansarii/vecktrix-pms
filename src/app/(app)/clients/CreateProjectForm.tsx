@@ -34,7 +34,7 @@ export function CreateProjectForm({ clientId, clientName }: { clientId: string; 
               startDate: (fd.get("startDate") as string) || undefined,
             });
             setOpen(false);
-            router.push(`/projects/${project.id}`);
+            router.push(`/projects/${project.project.id}`);
           } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to create project");
           }

@@ -4,14 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { LeadStatus } from "@prisma/client";
 import { formatStatus } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-
-const PIPELINE: LeadStatus[] = [
-  LeadStatus.new,
-  LeadStatus.contacted,
-  LeadStatus.qualified,
-  LeadStatus.proposal,
-  LeadStatus.won,
-];
+import { LEAD_PIPELINE_STAGES } from "@/lib/leads/pipeline";
 
 export function LeadsPipelineStepper({
   counts,
@@ -33,8 +26,8 @@ export function LeadsPipelineStepper({
   return (
     <div className="card-dark p-4 overflow-x-auto">
       <p className="text-xs font-medium text-text-darkSecondary mb-3">Pipeline</p>
-      <ol className="flex items-stretch min-w-[36rem] gap-1">
-        {PIPELINE.map((status, i) => {
+      <ol className="flex items-stretch min-w-[24rem] gap-1">
+        {LEAD_PIPELINE_STAGES.map((status, i) => {
           const selected = activeStatus === status;
           const count = counts[status] ?? 0;
           return (
@@ -54,7 +47,7 @@ export function LeadsPipelineStepper({
                 </span>
                 <span className="block text-lg font-medium text-white tabular-nums">{count}</span>
               </button>
-              {i < PIPELINE.length - 1 && (
+              {i < LEAD_PIPELINE_STAGES.length - 1 && (
                 <span className="self-center text-text-darkSecondary px-0.5" aria-hidden>
                   →
                 </span>
