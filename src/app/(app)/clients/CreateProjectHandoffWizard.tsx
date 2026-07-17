@@ -46,6 +46,9 @@ export function CreateProjectHandoffWizard({
   const [ctx, setCtx] = useState<Awaited<ReturnType<typeof getClientHandoffContext>> | null>(null);
   const [milestones, setMilestones] = useState<MilestoneDraft[]>(defaultMilestones);
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
+  const [projectName, setProjectName] = useState("");
+  const [projectDescription, setProjectDescription] = useState("");
+  const [projectStartDate, setProjectStartDate] = useState("");
   const router = useRouter();
 
   useEffect(() => {
@@ -59,6 +62,10 @@ export function CreateProjectHandoffWizard({
         setCtx(c);
         const files = c.lead?.files ?? [];
         setSelectedFileIds(files.map((f) => f.id));
+        const company = c.company ?? c.lead?.company ?? "";
+        setProjectName(company ? `${company} — Delivery` : "");
+        setProjectDescription("");
+        setProjectStartDate("");
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => setLoading(false));
@@ -74,7 +81,6 @@ export function CreateProjectHandoffWizard({
   }, [open]);
 
   const leadFiles = ctx?.lead?.files ?? [];
-  const companyDefault = ctx?.company ?? ctx?.lead?.company ?? "";
 
   if (!open) {
     return (
@@ -114,19 +120,28 @@ export function CreateProjectHandoffWizard({
             className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
-              if (step < 2) {
-                setStep(step + 1);
+              if (step === 0) {
+                if (!projectName.trim()) {
+                  setError("Project name is required");
+                  return;
+                }
+                setError(null);
+                setStep(1);
+                return;
+              }
+              if (step === 1) {
+                setError(null);
+                setStep(2);
                 return;
               }
               setError(null);
-              const fd = new FormData(e.currentTarget);
               startTransition(async () => {
                 try {
                   const { project } = await createDraftProjectFromClient({
                     clientId,
-                    name: fd.get("name") as string,
-                    description: (fd.get("description") as string) || undefined,
-                    startDate: (fd.get("startDate") as string) || undefined,
+                    name: projectName.trim(),
+                    description: projectDescription.trim() || undefined,
+                    startDate: projectStartDate || undefined,
                     milestones: milestones.map((m, i) => ({ ...m, sortOrder: i + 1 })),
                     leadFileIds: selectedFileIds,
                   });
@@ -144,12 +159,26 @@ export function CreateProjectHandoffWizard({
                 <input
                   name="name"
                   required
-                  defaultValue={companyDefault ? `${companyDefault} — Delivery` : ""}
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
                   placeholder="Project name"
                   className="input-dark w-full"
                 />
-                <textarea name="description" placeholder="Description (optional)" rows={3} className="input-dark w-full" />
-                <input name="startDate" type="date" className="input-dark w-full" />
+                <textarea
+                  name="description"
+                  value={projectDescription}
+                  onChange={(e) => setProjectDescription(e.target.value)}
+                  placeholder="Description (optional)"
+                  rows={3}
+                  className="input-dark w-full"
+                />
+                <input
+                  name="startDate"
+                  type="date"
+                  value={projectStartDate}
+                  onChange={(e) => setProjectStartDate(e.target.value)}
+                  className="input-dark w-full"
+                />
               </div>
             )}
 

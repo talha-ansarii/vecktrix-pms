@@ -87,10 +87,15 @@ async function promoteLeadFiles(
 
 export async function createDraftProjectFromClient(data: z.infer<typeof createHandoffSchema>) {
   const ctx = await assertAgencyAccess("project:write");
-  const parsed = createHandoffSchema.parse(data);
+  const parsed = createHandoffSchema.safeParse(data);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    throw new Error(first?.message ?? "Invalid project details");
+  }
+  const input = parsed.data;
 
   const client = await prisma.client.findFirstOrThrow({
-    where: { id: parsed.clientId, workspaceId: ctx.workspaceId },
+    where: { id: input.clientId, workspaceId: ctx.workspaceId },
     include: { lead: { select: { id: true, status: true } } },
   });
 
@@ -98,16 +103,16 @@ export async function createDraftProjectFromClient(data: z.infer<typeof createHa
     const p = await tx.project.create({
       data: {
         workspaceId: ctx.workspaceId,
-        clientId: parsed.clientId,
-        name: parsed.name,
-        description: parsed.description,
+        clientId: input.clientId,
+        name: input.name,
+        description: input.description,
         publishedToClient: false,
         sourceLeadId: client.lead?.id,
-        startDate: parsed.startDate ? new Date(parsed.startDate) : undefined,
+        startDate: input.startDate ? new Date(input.startDate) : undefined,
       },
     });
 
-    for (const m of parsed.milestones) {
+    for (const m of input.milestones) {
       await tx.milestone.create({
         data: {
           projectId: p.id,
@@ -133,7 +138,7 @@ export async function createDraftProjectFromClient(data: z.infer<typeof createHa
   const promoted = await promoteLeadFiles(
     project.id,
     client.lead?.id,
-    parsed.leadFileIds,
+    input.leadFileIds,
     ctx.workspaceId,
     ctx.userId,
   );
