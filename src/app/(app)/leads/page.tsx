@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { PageHeader, StatusBadge, EmptyState, ForbiddenState } from "@/components/ui";
 import { listLeads } from "@/lib/actions/leads";
-import { tryAssertPermission } from "@/lib/rbac";
+import { tryAssertPermission, getSessionWithPermissions, roleHasPermission } from "@/lib/rbac";
 import { formatDate } from "@/lib/utils";
 import { ConvertLeadButton } from "./ConvertLeadButton";
 import { CreateLeadForm } from "./CreateLeadForm";
@@ -25,6 +25,9 @@ export default async function LeadsPage({
   }
 
   const sp = await searchParams;
+  const { permissions, workspaceRole } = await getSessionWithPermissions();
+  const canWriteLead = roleHasPermission(permissions, "lead:write", workspaceRole);
+
   const leads = await listLeads({
     status: sp.status as LeadStatus | undefined,
     temperature: sp.temperature as LeadTemperature | undefined,
@@ -38,18 +41,25 @@ export default async function LeadsPage({
         overline="Sales"
         title="Leads"
         description="Pipeline and prospect management"
-        action={<CreateLeadForm />}
+        action={canWriteLead ? <CreateLeadForm /> : undefined}
       />
 
-      <Suspense fallback={null}>
-        <LeadsFilters />
-      </Suspense>
+      <div className="space-y-4">
+        <Suspense fallback={<div className="card-dark h-[88px] animate-pulse" />}>
+          <LeadsFilters />
+        </Suspense>
 
-      {leads.length === 0 ? (
-        <EmptyState title="No leads yet" description="Create a lead or wait for website intake." />
-      ) : (
-        <div className="card-dark overflow-x-auto">
-          <table className="w-full text-sm">
+        {leads.length === 0 ? (
+          <EmptyState
+            title="No leads yet"
+            description="Create a lead manually or wait for submissions from the Vecktrix website."
+            action={
+              canWriteLead ? <CreateLeadForm className="btn-secondary-dark text-sm py-2.5 px-5" /> : undefined
+            }
+          />
+        ) : (
+          <div className="card-dark overflow-x-auto p-4 sm:p-6">
+            <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-text-darkSecondary border-b border-white/6">
                 <th className="pb-3 font-medium">Name</th>
@@ -89,7 +99,8 @@ export default async function LeadsPage({
             </tbody>
           </table>
         </div>
-      )}
+        )}
+      </div>
     </AppShell>
   );
 }

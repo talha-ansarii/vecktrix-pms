@@ -54,11 +54,20 @@ export function PageHeader({
   );
 }
 
-export function EmptyState({ title, description }: { title: string; description?: string }) {
+export function EmptyState({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+}) {
   return (
-    <div className="card-dark text-center py-16">
-      <p className="heading-card text-white mb-2">{title}</p>
-      {description && <p className="body-text text-text-darkSecondary">{description}</p>}
+    <div className="card-dark text-center py-14 px-6">
+      <p className="font-sans text-lg font-medium text-white mb-2">{title}</p>
+      {description && <p className="body-text text-text-darkSecondary max-w-md mx-auto">{description}</p>}
+      {action && <div className="mt-6 flex justify-center">{action}</div>}
     </div>
   );
 }
