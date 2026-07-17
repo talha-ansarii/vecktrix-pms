@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { MONEY_BUCKET_RANGES, TIMELINE_BUCKET_RANGES } from "@/lib/leads/buckets";
 
 export function LeadsFilters() {
   const router = useRouter();
@@ -56,9 +57,9 @@ export function LeadsFilters() {
             onChange={(e) => update("money", e.target.value)}
           >
             <option value="">All budgets</option>
-            {["low", "mid", "high"].map((s) => (
+            {(["low", "mid", "high"] as const).map((s) => (
               <option key={s} value={s}>
-                {s}
+                {MONEY_BUCKET_RANGES[s].label} — {MONEY_BUCKET_RANGES[s].range}
               </option>
             ))}
           </select>
@@ -71,9 +72,9 @@ export function LeadsFilters() {
             onChange={(e) => update("timeline", e.target.value)}
           >
             <option value="">All timelines</option>
-            {["short", "medium", "long"].map((s) => (
+            {(["short", "medium", "long"] as const).map((s) => (
               <option key={s} value={s}>
-                {s}
+                {TIMELINE_BUCKET_RANGES[s].label} — {TIMELINE_BUCKET_RANGES[s].range}
               </option>
             ))}
           </select>

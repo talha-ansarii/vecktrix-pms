@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { updateLead } from "@/lib/actions/leads";
 import { LeadStatus, LeadTemperature, ServiceInterest } from "@prisma/client";
 import { formatStatus } from "@/lib/utils";
+import { BucketRangeLegend, MoneyBucketSelect, TimelineBucketSelect } from "../LeadBucketSelects";
 
 type Assignee = { id: string; name: string | null; email: string };
 
@@ -145,6 +146,9 @@ export function LeadDetailForm({
       </Section>
 
       <Section title="Segregation">
+        <div className="rounded-[4px] border border-white/6 bg-white/[0.02] p-3 mb-1">
+          <BucketRangeLegend />
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <Field label="Temperature">
             <select name="temperature" defaultValue={lead.temperature} className="input-dark text-sm w-full">
@@ -155,25 +159,11 @@ export function LeadDetailForm({
               ))}
             </select>
           </Field>
-          <Field label="Budget">
-            <select name="moneyBucket" defaultValue={lead.moneyBucket ?? ""} className="input-dark text-sm w-full">
-              <option value="">Not set</option>
-              {["low", "mid", "high"].map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+          <Field label="Budget bucket">
+            <MoneyBucketSelect defaultValue={lead.moneyBucket ?? ""} />
           </Field>
-          <Field label="Timeline">
-            <select name="timelineBucket" defaultValue={lead.timelineBucket ?? ""} className="input-dark text-sm w-full">
-              <option value="">Not set</option>
-              {["short", "medium", "long"].map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+          <Field label="Timeline bucket">
+            <TimelineBucketSelect defaultValue={lead.timelineBucket ?? ""} />
           </Field>
         </div>
       </Section>
@@ -203,6 +193,7 @@ export function LeadDetailForm({
           <textarea
             name="notes"
             defaultValue={lead.notes ?? ""}
+            placeholder="Discovery notes, proposals sent, next steps…"
             className="input-dark text-sm w-full min-h-[100px]"
           />
         </Field>

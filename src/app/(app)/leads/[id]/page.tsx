@@ -9,6 +9,8 @@ import {
 import { getSessionWithPermissions, roleHasPermission, tryAssertPermission } from "@/lib/rbac";
 import { formatDate } from "@/lib/utils";
 import { ConvertLeadButton } from "../ConvertLeadButton";
+import { LeadEditButton } from "../LeadEditButton";
+import { formatMoneyBucket, formatTimelineBucket } from "@/lib/leads/buckets";
 import { LeadDetailForm } from "./LeadDetailForm";
 import { LeadActivityForm } from "./LeadActivityForm";
 import { LeadFilesPanel } from "./LeadFilesPanel";
@@ -44,13 +46,16 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
         title={lead.name}
         description={lead.email}
         action={
-          showConvert ? (
-            <ConvertLeadButton leadId={lead.id} />
-          ) : lead.convertedClient ? (
-            <Link href={`/clients?highlight=${lead.convertedClient.id}`} className="btn-secondary-dark text-sm py-2 px-4">
-              View client →
-            </Link>
-          ) : undefined
+          <div className="flex flex-wrap gap-2 justify-end">
+            {canWrite && <LeadEditButton leadId={lead.id} />}
+            {showConvert ? (
+              <ConvertLeadButton leadId={lead.id} />
+            ) : lead.convertedClient ? (
+              <Link href={`/clients?highlight=${lead.convertedClient.id}`} className="btn-secondary-dark text-sm py-2 px-4">
+                View client →
+              </Link>
+            ) : null}
+          </div>
         }
       />
 
@@ -68,6 +73,14 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
           <>
             {" "}
             · Owner: {lead.assignedTo.name ?? lead.assignedTo.email}
+          </>
+        )}
+        {(lead.moneyBucket || lead.timelineBucket) && (
+          <>
+            <br />
+            {lead.moneyBucket && <>Budget: {formatMoneyBucket(lead.moneyBucket)}</>}
+            {lead.moneyBucket && lead.timelineBucket && " · "}
+            {lead.timelineBucket && <>Timeline: {formatTimelineBucket(lead.timelineBucket)}</>}
           </>
         )}
       </p>

@@ -3,8 +3,11 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createLead } from "@/lib/actions/leads";
+import { uploadLeadFile } from "@/lib/actions/lead-files";
 import { LeadTemperature } from "@prisma/client";
 import { X } from "lucide-react";
+import { BucketRangeLegend } from "./LeadBucketSelects";
+import { MoneyBucketSelect, TimelineBucketSelect } from "./LeadBucketSelects";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -65,7 +68,7 @@ export function CreateLeadForm({ className }: { className?: string }) {
               const fd = new FormData(form);
               startTransition(async () => {
                 try {
-                  await createLead({
+                  const lead = await createLead({
                     name: fd.get("name") as string,
                     email: fd.get("email") as string,
                     company: (fd.get("company") as string) || undefined,
@@ -76,8 +79,16 @@ export function CreateLeadForm({ className }: { className?: string }) {
                       (fd.get("timelineBucket") as "short" | "medium" | "long") || undefined,
                     notes: (fd.get("notes") as string) || undefined,
                   });
+                  const proposal = fd.get("proposalFile") as File | null;
+                  if (proposal?.size) {
+                    const uploadFd = new FormData();
+                    uploadFd.set("leadId", lead.id);
+                    uploadFd.set("file", proposal);
+                    await uploadLeadFile(uploadFd);
+                  }
                   setOpen(false);
                   form.reset();
+                  router.push(`/leads/${lead.id}`);
                   router.refresh();
                 } catch (err) {
                   setError(err instanceof Error ? err.message : "Could not create lead");
@@ -123,6 +134,10 @@ export function CreateLeadForm({ className }: { className?: string }) {
               </Field>
             </div>
 
+            <div className="rounded-[4px] border border-white/6 bg-white/[0.02] p-3">
+              <BucketRangeLegend />
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Field label="Temperature">
                 <select name="temperature" className="input-dark text-sm w-full" defaultValue="warm">
@@ -131,29 +146,28 @@ export function CreateLeadForm({ className }: { className?: string }) {
                   <option value="cold">Cold</option>
                 </select>
               </Field>
-              <Field label="Budget">
-                <select name="moneyBucket" className="input-dark text-sm w-full" defaultValue="">
-                  <option value="">Not set</option>
-                  <option value="low">Low</option>
-                  <option value="mid">Mid</option>
-                  <option value="high">High</option>
-                </select>
+              <Field label="Budget bucket">
+                <MoneyBucketSelect />
               </Field>
-              <Field label="Timeline">
-                <select name="timelineBucket" className="input-dark text-sm w-full" defaultValue="">
-                  <option value="">Not set</option>
-                  <option value="short">Short</option>
-                  <option value="medium">Medium</option>
-                  <option value="long">Long</option>
-                </select>
+              <Field label="Timeline bucket">
+                <TimelineBucketSelect />
               </Field>
             </div>
 
             <Field label="Notes">
               <textarea
                 name="notes"
-                placeholder="Context, next steps, source details…"
+                placeholder="Discovery notes, next steps, call summaries…"
                 className="input-dark text-sm w-full min-h-[88px]"
+              />
+            </Field>
+
+            <Field label="Proposal file (optional)">
+              <input
+                name="proposalFile"
+                type="file"
+                accept=".pdf,.doc,.docx,.ppt,.pptx,.png,.jpg,.jpeg"
+                className="block w-full text-sm text-text-darkSecondary file:mr-3 file:py-1.5 file:px-3 file:rounded-[4px] file:border-0 file:bg-white/10 file:text-white"
               />
             </Field>
 

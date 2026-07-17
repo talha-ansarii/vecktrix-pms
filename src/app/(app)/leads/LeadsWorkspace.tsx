@@ -5,10 +5,13 @@ import { useState } from "react";
 import { LeadStatus } from "@prisma/client";
 import { StatusBadge } from "@/components/ui";
 import { formatDate, formatStatus } from "@/lib/utils";
+import { formatMoneyBucket, formatTimelineBucket } from "@/lib/leads/buckets";
 import { ConvertLeadButton } from "./ConvertLeadButton";
 import { LeadStatusSelect } from "./LeadStatusSelect";
 import { LeadsPipelineStepper } from "./LeadsPipelineStepper";
 import { LeadsFilters } from "./LeadsFilters";
+import { EditLeadModal } from "./EditLeadModal";
+import { BucketRangeLegend } from "./LeadBucketSelects";
 
 export type LeadListItem = {
   id: string;
@@ -48,10 +51,14 @@ export function LeadsWorkspace({
   canConvert: boolean;
 }) {
   const [view, setView] = useState<"table" | "board">("table");
+  const [editLeadId, setEditLeadId] = useState<string | null>(null);
 
   return (
     <div className="space-y-4">
       <LeadsPipelineStepper counts={counts} activeStatus={activeStatus} />
+      <div className="card-dark p-4">
+        <BucketRangeLegend />
+      </div>
       <LeadsFilters />
 
       <div className="flex items-center justify-between gap-3">
@@ -100,7 +107,14 @@ export function LeadsWorkspace({
                         <StatusBadge status={lead.temperature} />
                       </div>
                       {canWrite && (
-                        <div className="mt-2">
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditLeadId(lead.id)}
+                            className="btn-secondary-dark text-xs py-1 px-2"
+                          >
+                            Edit
+                          </button>
                           <LeadStatusSelect leadId={lead.id} status={lead.status} />
                         </div>
                       )}
@@ -154,18 +168,33 @@ export function LeadsWorkspace({
                   <td className="py-3">
                     <StatusBadge status={lead.temperature} />
                   </td>
-                  <td className="py-3 text-text-darkSecondary">{lead.moneyBucket ?? "—"}</td>
-                  <td className="py-3 text-text-darkSecondary">{lead.timelineBucket ?? "—"}</td>
+                  <td className="py-3 text-text-darkSecondary text-xs max-w-[10rem]">
+                    {formatMoneyBucket(lead.moneyBucket)}
+                  </td>
+                  <td className="py-3 text-text-darkSecondary text-xs max-w-[10rem]">
+                    {formatTimelineBucket(lead.timelineBucket)}
+                  </td>
                   <td className="py-3 text-text-darkSecondary">{lead.source}</td>
                   <td className="py-3 text-text-darkSecondary">{formatDate(lead.createdAt)}</td>
                   <td className="py-3 text-right whitespace-nowrap">
-                    {lead.convertedClientId && lead.convertedClient ? (
+                    <div className="flex flex-col items-end gap-2">
+                      {canWrite && (
+                        <button
+                          type="button"
+                          onClick={() => setEditLeadId(lead.id)}
+                          className="text-xs text-text-darkSecondary hover:text-white underline"
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {lead.convertedClientId && lead.convertedClient ? (
                       <Link href="/clients" className="text-xs text-emerald-400 hover:underline">
                         View client
                       </Link>
                     ) : canConvert && ["qualified", "proposal"].includes(lead.status) ? (
                       <ConvertLeadButton leadId={lead.id} size="xs" />
                     ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -173,6 +202,7 @@ export function LeadsWorkspace({
           </table>
         </div>
       )}
+      <EditLeadModal leadId={editLeadId} open={Boolean(editLeadId)} onClose={() => setEditLeadId(null)} />
     </div>
   );
 }
