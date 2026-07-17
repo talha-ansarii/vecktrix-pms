@@ -69,3 +69,12 @@ Agency may edit milestone plan fields (`updateMilestonePlan`); changes after fir
 ## Sequential tasks
 
 Within a milestone, tasks ordered by `sortOrder`. Next unlocks when previous is `approved`. PM may force-unlock with audit note.
+
+## Whiteboard lifecycle (Phase 7)
+
+See `.agents/WHITEBOARD_WORKFLOW.md`. Key runtime rules:
+
+- **Sales** — leads/clients only; no project list.
+- **Delivery roles** — projects filtered by `ProjectMember`.
+- **QA sign-off** (`qaSignedOffAt`) required before client milestone review.
+- **Payment** — next milestone unlocks only when completed milestone `paymentStatus` is `paid`.

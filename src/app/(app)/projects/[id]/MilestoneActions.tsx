@@ -6,6 +6,7 @@ import {
   updateMilestoneStatus,
   overrideMilestone,
   updatePaymentStatus,
+  qaSignOffMilestone,
 } from "@/lib/actions/milestones";
 import type { MilestoneStatus } from "@prisma/client";
 
@@ -15,23 +16,37 @@ export function MilestoneActions({
   canManageMilestones,
   canOverride,
   canPayment,
+  canQaSignOff,
+  qaSignedOff,
 }: {
   milestoneId: string;
   status: MilestoneStatus;
   canManageMilestones: boolean;
   canOverride: boolean;
   canPayment: boolean;
+  canQaSignOff: boolean;
+  qaSignedOff: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [overrideNote, setOverrideNote] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("pending");
 
-  if (!canManageMilestones && !canOverride && !canPayment) return null;
+  if (!canManageMilestones && !canOverride && !canPayment && !canQaSignOff) return null;
 
   return (
     <div className="mt-4 space-y-2">
       <div className="flex gap-2 flex-wrap">
-        {canManageMilestones && status === "internal_complete" && (
+        {canQaSignOff && status === "internal_complete" && !qaSignedOff && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => startTransition(() => { void qaSignOffMilestone(milestoneId); })}
+            className="btn-primary-dark text-xs py-1.5 px-3"
+          >
+            QA sign-off
+          </button>
+        )}
+        {canManageMilestones && status === "internal_complete" && qaSignedOff && (
           <button
             type="button"
             disabled={pending}
@@ -56,6 +71,9 @@ export function MilestoneActions({
           </button>
         )}
       </div>
+      {canManageMilestones && status === "internal_complete" && !qaSignedOff && (
+        <p className="text-xs text-amber-400/90">Waiting for QA sign-off before client review.</p>
+      )}
       {canOverride && (
         <div className="flex gap-2 flex-wrap items-center">
           <input

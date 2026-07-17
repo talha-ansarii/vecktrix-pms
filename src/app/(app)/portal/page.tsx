@@ -4,6 +4,7 @@ import { getClientPortalData } from "@/lib/actions/clients";
 import { formatStatus } from "@/lib/utils";
 import { ClientMilestoneReview } from "./ClientMilestoneReview";
 import { ClientPlanConcernForm } from "./ClientPlanConcernForm";
+import { ClientMilestonePaymentBlock } from "./ClientMilestonePaymentBlock";
 import { formatDate } from "@/lib/utils";
 
 export default async function PortalPage() {
@@ -83,6 +84,12 @@ export default async function PortalPage() {
                     {milestone.status === "awaiting_client_review" && (
                       <ClientMilestoneReview milestoneId={milestone.id} />
                     )}
+
+                    <ClientMilestonePaymentBlock
+                      milestoneTitle={milestone.title}
+                      status={milestone.status}
+                      paymentStatus={milestone.paymentStatus}
+                    />
                   </div>
                 ))}
               </div>

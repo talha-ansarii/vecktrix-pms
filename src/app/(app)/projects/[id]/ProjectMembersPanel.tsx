@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 import { addProjectMember } from "@/lib/actions/projects";
 import { WorkspaceRole } from "@prisma/client";
+import { formatStatus } from "@/lib/utils";
 
 type MemberOption = {
   userId: string;
@@ -26,12 +27,12 @@ export function ProjectMembersPanel({
 
   return (
     <div className="card-dark">
-      <h3 className="overline-text text-text-darkSecondary mb-4">Team</h3>
+      <h3 className="overline-text text-text-darkSecondary mb-4">Team on this project</h3>
       <ul className="space-y-3 mb-4">
         {members.map((m) => (
           <li key={m.id} className="flex items-center justify-between text-sm">
             <span className="text-white">{m.user.name ?? m.user.email}</span>
-            <span className="text-text-darkSecondary text-xs">{m.role.replace(/_/g, " ")}</span>
+            <span className="text-text-darkSecondary text-xs">{formatStatus(m.role)}</span>
           </li>
         ))}
       </ul>

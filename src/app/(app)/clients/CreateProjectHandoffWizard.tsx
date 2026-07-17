@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { X, ChevronUp, ChevronDown } from "lucide-react";
 import { WorkspaceRole } from "@prisma/client";
-import { createDraftProjectFromClient, getClientHandoffContext } from "@/lib/actions/project-handoff";
+import { createDraftProjectFromClient, getClientHandoffContext, listHandoffPmOptions } from "@/lib/actions/project-handoff";
 import { DEFAULT_MILESTONES } from "@/lib/services/milestones";
 import { formatStatus } from "@/lib/utils";
 
@@ -49,6 +49,8 @@ export function CreateProjectHandoffWizard({
   const [projectName, setProjectName] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
   const [projectStartDate, setProjectStartDate] = useState("");
+  const [assignPmUserId, setAssignPmUserId] = useState("");
+  const [pmOptions, setPmOptions] = useState<Awaited<ReturnType<typeof listHandoffPmOptions>>>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -69,6 +71,13 @@ export function CreateProjectHandoffWizard({
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
       .finally(() => setLoading(false));
+
+    listHandoffPmOptions()
+      .then((opts) => {
+        setPmOptions(opts);
+        if (opts.length > 0) setAssignPmUserId(opts[0].userId);
+      })
+      .catch(() => setPmOptions([]));
   }, [open, clientId]);
 
   useEffect(() => {
@@ -144,6 +153,7 @@ export function CreateProjectHandoffWizard({
                     startDate: projectStartDate || undefined,
                     milestones: milestones.map((m, i) => ({ ...m, sortOrder: i + 1 })),
                     leadFileIds: selectedFileIds,
+                    assignPmUserId: assignPmUserId || undefined,
                   });
                   setOpen(false);
                   router.push(`/projects/${project.id}`);
@@ -179,6 +189,23 @@ export function CreateProjectHandoffWizard({
                   onChange={(e) => setProjectStartDate(e.target.value)}
                   className="input-dark w-full"
                 />
+                {pmOptions.length > 0 && (
+                  <label className="block space-y-1.5">
+                    <span className="text-xs text-text-darkSecondary">Assign project manager</span>
+                    <select
+                      value={assignPmUserId}
+                      onChange={(e) => setAssignPmUserId(e.target.value)}
+                      className="input-dark w-full text-sm"
+                      required
+                    >
+                      {pmOptions.map((m) => (
+                        <option key={m.userId} value={m.userId}>
+                          {m.user.name ?? m.user.email} ({formatStatus(m.role)})
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
               </div>
             )}
 

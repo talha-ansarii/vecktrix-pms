@@ -41,9 +41,14 @@ async function assertMilestoneTasksComplete(milestoneId: string) {
   }
 }
 
-async function unlockNextMilestone(projectId: string, currentSortOrder: number) {
+async function unlockNextMilestone(projectId: string, completedSortOrder: number) {
+  const completed = await prisma.milestone.findFirst({
+    where: { projectId, sortOrder: completedSortOrder },
+  });
+  if (!completed || completed.paymentStatus !== "paid") return;
+
   const next = await prisma.milestone.findFirst({
-    where: { projectId, sortOrder: currentSortOrder + 1 },
+    where: { projectId, sortOrder: completedSortOrder + 1 },
   });
   if (next?.status === MilestoneStatus.locked) {
     await prisma.milestone.update({
@@ -76,10 +81,6 @@ export async function updateMilestoneStatus(data: z.infer<typeof transitionSchem
     data: { status },
   });
 
-  if (status === MilestoneStatus.completed) {
-    await unlockNextMilestone(milestone.projectId, milestone.sortOrder);
-  }
-
   revalidatePath(`/projects/${milestone.projectId}`);
   return updated;
 }
@@ -93,6 +94,10 @@ export async function submitMilestoneForClientReview(milestoneId: string) {
   });
 
   await assertMilestoneTasksComplete(milestoneId);
+
+  if (!milestone.qaSignedOffAt) {
+    throw new Error("QA must sign off before sending this milestone to the client");
+  }
 
   const updated = await prisma.milestone.update({
     where: { id: milestoneId },
@@ -171,6 +176,40 @@ export async function clientReviewMilestone(data: z.infer<typeof clientReviewSch
   revalidatePath(`/projects/${milestone.projectId}`);
 }
 
+export async function qaSignOffMilestone(milestoneId: string) {
+  const ctx = await assertAgencyAccess("milestone:write");
+  if (ctx.workspaceRole !== "qa_engineer" && ctx.workspaceRole !== "agency_admin") {
+    throw new Error("Only QA can sign off milestones");
+  }
+
+  const milestone = await prisma.milestone.findFirstOrThrow({
+    where: { id: milestoneId, project: { workspaceId: ctx.workspaceId } },
+  });
+
+  if (milestone.status !== MilestoneStatus.internal_complete) {
+    throw new Error("Milestone must be internally complete before QA sign-off");
+  }
+
+  await assertMilestoneTasksComplete(milestoneId);
+
+  const updated = await prisma.milestone.update({
+    where: { id: milestoneId },
+    data: { qaSignedOffAt: new Date() },
+  });
+
+  await notifyWorkspaceRole({
+    workspaceId: ctx.workspaceId,
+    roles: ["project_manager"],
+    type: "milestone",
+    title: "QA signed off milestone",
+    message: milestone.title,
+    href: `/projects/${milestone.projectId}`,
+  });
+
+  revalidatePath(`/projects/${milestone.projectId}`);
+  return updated;
+}
+
 export async function overrideMilestone(milestoneId: string, note: string) {
   const ctx = await assertAgencyAccess("milestone:override");
   if (!note.trim()) throw new Error("Override note is required");
@@ -199,6 +238,10 @@ export async function updatePaymentStatus(milestoneId: string, paymentStatus: st
     where: { id: milestoneId },
     data: { paymentStatus },
   });
+
+  if (paymentStatus === "paid" && milestone.status === MilestoneStatus.completed) {
+    await unlockNextMilestone(milestone.projectId, milestone.sortOrder);
+  }
 
   revalidatePath(`/projects/${milestone.projectId}`);
   return updated;

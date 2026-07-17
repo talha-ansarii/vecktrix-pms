@@ -10,6 +10,14 @@
 | 5 | Client portal | ✅ Complete |
 | 6 | Ops, channels, production | ✅ Complete |
 
+## Phase 7 — Whiteboard alignment
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 7 | Whiteboard workflow (visibility, QA, payment gate) | ✅ Complete |
+
+See [WHITEBOARD_WORKFLOW.md](./WHITEBOARD_WORKFLOW.md).
+
 ## Phase 0 exit
 
 - [x] `.agents` complete including DESIGN_SYSTEM, RBAC, DOMAIN_MODEL

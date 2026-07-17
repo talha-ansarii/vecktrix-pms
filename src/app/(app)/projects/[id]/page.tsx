@@ -38,6 +38,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     canOverride: roleHasPermission(permissions, "milestone:override", workspaceRole),
     canPayment: roleHasPermission(permissions, "payment:write", workspaceRole),
     canMemberManage: roleHasPermission(permissions, "project:member_manage", workspaceRole),
+    canQaSignOff:
+      workspaceRole === "qa_engineer" || workspaceRole === "agency_admin",
   };
 
   return (
@@ -110,6 +112,8 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 canManageMilestones={caps.canManageMilestones}
                 canOverride={caps.canOverride}
                 canPayment={caps.canPayment}
+                canQaSignOff={caps.canQaSignOff}
+                qaSignedOff={Boolean(milestone.qaSignedOffAt)}
               />
             </div>
           ))}

@@ -8,6 +8,10 @@ import { assertAgencyAccess } from "@/lib/rbac";
 import { DEFAULT_MILESTONES } from "@/lib/services/milestones";
 import { appendProjectPlanLog } from "@/lib/project-plan";
 import { notifyUser } from "@/lib/notifications/events";
+import {
+  assertProjectVisible,
+  projectVisibilityWhere,
+} from "@/lib/rbac/project-scope";
 
 const createProjectSchema = z.object({
   clientId: z.string(),
@@ -26,7 +30,7 @@ export async function listProjects() {
   const ctx = await assertAgencyAccess("project:read");
 
   return prisma.project.findMany({
-    where: { workspaceId: ctx.workspaceId },
+    where: projectVisibilityWhere(ctx.workspaceId, ctx.workspaceRole, ctx.userId),
     include: {
       client: { select: { id: true, name: true, company: true } },
       _count: { select: { milestones: true, members: true } },
@@ -37,6 +41,7 @@ export async function listProjects() {
 
 export async function getProject(id: string) {
   const ctx = await assertAgencyAccess("project:read");
+  await assertProjectVisible(id, ctx.workspaceId, ctx.workspaceRole, ctx.userId);
 
   return prisma.project.findFirstOrThrow({
     where: { id, workspaceId: ctx.workspaceId },

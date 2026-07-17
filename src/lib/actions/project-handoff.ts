@@ -20,6 +20,7 @@ const createHandoffSchema = z.object({
   startDate: z.string().optional(),
   milestones: z.array(milestoneDraftSchema).min(1),
   leadFileIds: z.array(z.string()).default([]),
+  assignPmUserId: z.string().optional(),
 });
 
 export async function getClientHandoffContext(clientId: string) {
@@ -41,6 +42,19 @@ export async function getClientHandoffContext(clientId: string) {
   });
 
   return client;
+}
+
+export async function listHandoffPmOptions() {
+  const ctx = await assertAgencyAccess("project:write");
+
+  return prisma.workspaceMember.findMany({
+    where: {
+      workspaceId: ctx.workspaceId,
+      role: { in: [WorkspaceRole.project_manager, WorkspaceRole.agency_admin] },
+    },
+    include: { user: { select: { id: true, name: true, email: true } } },
+    orderBy: { createdAt: "asc" },
+  });
 }
 
 async function promoteLeadFiles(
@@ -99,6 +113,17 @@ export async function createDraftProjectFromClient(data: z.infer<typeof createHa
     include: { lead: { select: { id: true, status: true } } },
   });
 
+  if (input.assignPmUserId) {
+    const pmMember = await prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId: ctx.workspaceId,
+        userId: input.assignPmUserId,
+        role: { in: [WorkspaceRole.project_manager, WorkspaceRole.agency_admin] },
+      },
+    });
+    if (!pmMember) throw new Error("Selected user cannot be assigned as project manager");
+  }
+
   const project = await prisma.$transaction(async (tx) => {
     const p = await tx.project.create({
       data: {
@@ -127,7 +152,7 @@ export async function createDraftProjectFromClient(data: z.infer<typeof createHa
     await tx.projectMember.create({
       data: {
         projectId: p.id,
-        userId: ctx.userId,
+        userId: input.assignPmUserId ?? ctx.userId,
         role: WorkspaceRole.project_manager,
       },
     });

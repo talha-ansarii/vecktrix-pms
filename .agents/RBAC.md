@@ -29,5 +29,6 @@
 
 - Client never gets `task:review` or `task:comment`
 - Only PM (or admin) toggles `clientVisible`
-- Only PM submits milestone for client review
-- ProjectMember role scopes delivery work; workspace role gates Sales/Admin/Client portal
+- Only PM submits milestone for client review (after QA sign-off)
+- **Delivery visibility:** PM, Designer, PE, QA only see projects where they are `ProjectMember`; `agency_admin` sees all
+- Sales has no project access (leads/clients only)

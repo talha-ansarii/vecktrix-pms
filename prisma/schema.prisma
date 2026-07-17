@@ -421,6 +421,7 @@ model Milestone {
   status        MilestoneStatus @default(locked)
   ownerRole     WorkspaceRole
   paymentStatus String?
+  qaSignedOffAt DateTime?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
