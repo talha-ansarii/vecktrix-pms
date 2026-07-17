@@ -147,6 +147,7 @@ model User {
   invitesSent       Invite[]          @relation("InvitedBy")
   leadsAssigned     Lead[]            @relation("LeadAssignee")
   leadActivities    LeadActivity[]
+  leadFiles         LeadFile[]        @relation("LeadFileUploader")
   clients           Client[]
   projectMembers    ProjectMember[]
   tasksAssigned     Task[]            @relation("TaskAssignee")
@@ -301,6 +302,7 @@ model Lead {
   convertedClient Client?        @relation("LeadConversion", fields: [convertedClientId], references: [id])
   assignedTo      User?          @relation("LeadAssignee", fields: [assignedToId], references: [id])
   activities      LeadActivity[]
+  files           LeadFile[]
 
   @@index([workspaceId, status])
   @@index([email, workspaceId])
@@ -316,6 +318,23 @@ model LeadActivity {
 
   lead Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
   user User? @relation(fields: [userId], references: [id])
+
+  @@index([leadId])
+}
+
+model LeadFile {
+  id           String   @id @default(cuid())
+  leadId       String
+  name         String
+  url          String
+  storageKey   String
+  mimeType     String
+  size         Int
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  lead       Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  uploadedBy User @relation("LeadFileUploader", fields: [uploadedById], references: [id])
 
   @@index([leadId])
 }

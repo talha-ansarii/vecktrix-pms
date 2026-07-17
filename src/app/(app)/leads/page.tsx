@@ -1,12 +1,9 @@
-import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
-import { PageHeader, StatusBadge, EmptyState, ForbiddenState } from "@/components/ui";
-import { listLeads } from "@/lib/actions/leads";
+import { PageHeader, EmptyState, ForbiddenState } from "@/components/ui";
+import { listLeads, getLeadStatusCounts } from "@/lib/actions/leads";
 import { tryAssertPermission, getSessionWithPermissions, roleHasPermission } from "@/lib/rbac";
-import { formatDate } from "@/lib/utils";
-import { ConvertLeadButton } from "./ConvertLeadButton";
 import { CreateLeadForm } from "./CreateLeadForm";
-import { LeadsFilters } from "./LeadsFilters";
+import { LeadsWorkspace } from "./LeadsWorkspace";
 import { Suspense } from "react";
 import type { LeadStatus, LeadTemperature } from "@prisma/client";
 
@@ -27,13 +24,34 @@ export default async function LeadsPage({
   const sp = await searchParams;
   const { permissions, workspaceRole } = await getSessionWithPermissions();
   const canWriteLead = roleHasPermission(permissions, "lead:write", workspaceRole);
+  const canConvert = roleHasPermission(permissions, "lead:convert", workspaceRole);
 
-  const leads = await listLeads({
-    status: sp.status as LeadStatus | undefined,
-    temperature: sp.temperature as LeadTemperature | undefined,
-    moneyBucket: sp.money as "low" | "mid" | "high" | undefined,
-    timelineBucket: sp.timeline as "short" | "medium" | "long" | undefined,
-  });
+  const [{ counts }, leads] = await Promise.all([
+    getLeadStatusCounts(),
+    listLeads({
+      status: sp.status as LeadStatus | undefined,
+      temperature: sp.temperature as LeadTemperature | undefined,
+      moneyBucket: sp.money as "low" | "mid" | "high" | undefined,
+      timelineBucket: sp.timeline as "short" | "medium" | "long" | undefined,
+    }),
+  ]);
+
+  const totalLeads = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  const serialized = leads.map((lead) => ({
+    id: lead.id,
+    name: lead.name,
+    email: lead.email,
+    company: lead.company,
+    status: lead.status,
+    temperature: lead.temperature,
+    moneyBucket: lead.moneyBucket,
+    timelineBucket: lead.timelineBucket,
+    source: lead.source,
+    createdAt: lead.createdAt.toISOString(),
+    convertedClientId: lead.convertedClientId,
+    convertedClient: lead.convertedClient,
+  }));
 
   return (
     <AppShell currentPath="/leads">
@@ -44,63 +62,23 @@ export default async function LeadsPage({
         action={canWriteLead ? <CreateLeadForm /> : undefined}
       />
 
-      <div className="space-y-4">
-        <Suspense fallback={<div className="card-dark h-[88px] animate-pulse" />}>
-          <LeadsFilters />
-        </Suspense>
-
-        {leads.length === 0 ? (
-          <EmptyState
-            title="No leads yet"
-            description="Create a lead manually or wait for submissions from the Vecktrix website."
-            action={
-              canWriteLead ? <CreateLeadForm className="btn-secondary-dark text-sm py-2.5 px-5" /> : undefined
-            }
+      {totalLeads === 0 ? (
+        <EmptyState
+          title="No leads yet"
+          description="Create a lead manually or wait for submissions from the Vecktrix website."
+          action={canWriteLead ? <CreateLeadForm className="btn-secondary-dark text-sm py-2.5 px-5" /> : undefined}
+        />
+      ) : (
+        <Suspense fallback={<div className="card-dark h-32 animate-pulse" />}>
+          <LeadsWorkspace
+            leads={serialized}
+            counts={counts}
+            activeStatus={sp.status}
+            canWrite={canWriteLead}
+            canConvert={canConvert}
           />
-        ) : (
-          <div className="card-dark overflow-x-auto p-4 sm:p-6">
-            <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-text-darkSecondary border-b border-white/6">
-                <th className="pb-3 font-medium">Name</th>
-                <th className="pb-3 font-medium">Company</th>
-                <th className="pb-3 font-medium">Status</th>
-                <th className="pb-3 font-medium">Temp</th>
-                <th className="pb-3 font-medium">Money</th>
-                <th className="pb-3 font-medium">Timeline</th>
-                <th className="pb-3 font-medium">Source</th>
-                <th className="pb-3 font-medium">Created</th>
-                <th className="pb-3 font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {leads.map((lead) => (
-                <tr key={lead.id} className="border-b border-white/6 last:border-0">
-                  <td className="py-3">
-                    <Link href={`/leads/${lead.id}`} className="text-white font-medium hover:underline">
-                      {lead.name}
-                    </Link>
-                    <p className="text-text-darkSecondary text-xs">{lead.email}</p>
-                  </td>
-                  <td className="py-3 text-text-darkSecondary">{lead.company ?? "—"}</td>
-                  <td className="py-3"><StatusBadge status={lead.status} /></td>
-                  <td className="py-3"><StatusBadge status={lead.temperature} /></td>
-                  <td className="py-3 text-text-darkSecondary">{lead.moneyBucket ?? "—"}</td>
-                  <td className="py-3 text-text-darkSecondary">{lead.timelineBucket ?? "—"}</td>
-                  <td className="py-3 text-text-darkSecondary">{lead.source}</td>
-                  <td className="py-3 text-text-darkSecondary">{formatDate(lead.createdAt)}</td>
-                  <td className="py-3">
-                    {["qualified", "proposal"].includes(lead.status) && !lead.convertedClientId && (
-                      <ConvertLeadButton leadId={lead.id} />
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        )}
-      </div>
+        </Suspense>
+      )}
     </AppShell>
   );
 }

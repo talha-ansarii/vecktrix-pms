@@ -2,13 +2,17 @@ import Link from "next/link";
 import { AppShell } from "@/components/AppShell";
 import { PageHeader, StatusBadge, EmptyState } from "@/components/ui";
 import { listClients } from "@/lib/actions/clients";
-import { formatDate } from "@/lib/utils";
+import { formatDate, cn } from "@/lib/utils";
 import { CreateProjectForm } from "./CreateProjectForm";
 import { ClientPortalInviteButton } from "./ClientPortalInviteButton";
 import { tryAssertPermission } from "@/lib/rbac";
 import { ForbiddenState } from "@/components/ui";
 
-export default async function ClientsPage() {
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const access = await tryAssertPermission("client:read");
   if (!access.ok) {
     return (
@@ -17,6 +21,9 @@ export default async function ClientsPage() {
       </AppShell>
     );
   }
+
+  const sp = await searchParams;
+  const highlight = sp.highlight;
 
   const clients = await listClients();
 
@@ -33,7 +40,14 @@ export default async function ClientsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {clients.map((client) => (
-            <div key={client.id} className="card-dark">
+            <div
+              key={client.id}
+              id={`client-${client.id}`}
+              className={cn(
+                "card-dark scroll-mt-24",
+                highlight === client.id && "ring-2 ring-emerald-400/60",
+              )}
+            >
               <h3 className="heading-card text-white text-xl mb-1">{client.name}</h3>
               {client.company && <p className="text-text-darkSecondary text-sm mb-3">{client.company}</p>}
               <p className="text-sm text-text-darkSecondary mb-4">{client.email}</p>

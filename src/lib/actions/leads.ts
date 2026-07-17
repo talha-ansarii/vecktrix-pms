@@ -24,6 +24,48 @@ const updateLeadSchema = createLeadSchema.partial().extend({
   assignedToId: z.string().nullable().optional(),
 });
 
+const PIPELINE_STATUSES: LeadStatus[] = [
+  LeadStatus.new,
+  LeadStatus.contacted,
+  LeadStatus.qualified,
+  LeadStatus.proposal,
+  LeadStatus.won,
+];
+
+export async function listLeadAssigneeOptions() {
+  const ctx = await assertAgencyAccess("lead:read");
+
+  const members = await prisma.workspaceMember.findMany({
+    where: {
+      workspaceId: ctx.workspaceId,
+      role: { in: ["agency_admin", "sales", "project_manager"] },
+    },
+    include: { user: { select: { id: true, name: true, email: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return members.map((m) => m.user);
+}
+
+export async function getLeadStatusCounts() {
+  const ctx = await assertAgencyAccess("lead:read");
+
+  const rows = await prisma.lead.groupBy({
+    by: ["status"],
+    where: { workspaceId: ctx.workspaceId },
+    _count: { _all: true },
+  });
+
+  const counts: Record<string, number> = {};
+  for (const s of Object.values(LeadStatus)) {
+    counts[s] = 0;
+  }
+  for (const row of rows) {
+    counts[row.status] = row._count._all;
+  }
+  return { counts, pipeline: PIPELINE_STATUSES };
+}
+
 export async function listLeads(filters?: {
   status?: LeadStatus;
   temperature?: LeadTemperature;
@@ -42,6 +84,7 @@ export async function listLeads(filters?: {
     },
     include: {
       assignedTo: { select: { id: true, name: true, email: true } },
+      convertedClient: { select: { id: true, name: true, email: true } },
       activities: { orderBy: { createdAt: "desc" }, take: 5 },
     },
     orderBy: { createdAt: "desc" },
@@ -54,6 +97,11 @@ export async function getLead(id: string) {
     where: { id, workspaceId: ctx.workspaceId },
     include: {
       assignedTo: { select: { id: true, name: true, email: true } },
+      convertedClient: { select: { id: true, name: true, email: true } },
+      files: {
+        include: { uploadedBy: { select: { id: true, name: true, email: true } } },
+        orderBy: { createdAt: "desc" },
+      },
       activities: {
         orderBy: { createdAt: "desc" },
         include: { user: { select: { name: true, email: true } } },
@@ -106,6 +154,29 @@ export async function updateLead(data: z.infer<typeof updateLeadSchema>) {
   });
 
   revalidatePath("/leads");
+  revalidatePath(`/leads/${lead.id}`);
+  return lead;
+}
+
+export async function updateLeadStatus(leadId: string, status: LeadStatus) {
+  const ctx = await assertAgencyAccess("lead:write");
+
+  const lead = await prisma.lead.update({
+    where: { id: leadId, workspaceId: ctx.workspaceId },
+    data: { status },
+  });
+
+  await prisma.leadActivity.create({
+    data: {
+      leadId: lead.id,
+      userId: ctx.userId,
+      type: "status",
+      content: `Status changed to ${status.replace(/_/g, " ")}`,
+    },
+  });
+
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
   return lead;
 }
 
@@ -154,6 +225,7 @@ export async function convertLeadToClient(leadId: string) {
   });
 
   revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
   revalidatePath("/clients");
   return result;
 }
@@ -171,5 +243,6 @@ export async function addLeadActivity(leadId: string, content: string) {
   });
 
   revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
   return activity;
 }
