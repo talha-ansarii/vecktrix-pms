@@ -60,7 +60,11 @@ Use this before deploying Vecktrix PMS to production.
 
 - [ ] Login with admin credentials
 - [ ] Dashboard loads with stats
-- [ ] Create lead → convert to client → create project
-- [ ] 5 milestones appear on new project
+- [ ] Create lead → convert to client → **handoff wizard** → publish → client portal sees project
+- [ ] Proposal file on qualified lead moves to **proposal** stage
+- [ ] QA sign-off required before client milestone review
+- [ ] Milestone **paid** unlocks next milestone
+- [ ] Delivery user sees only **assigned** projects
+- [ ] 5 milestones appear on new project (draft: all locked until publish)
 - [ ] Client portal shows only client-visible tasks
 - [ ] Intake API returns `{ id, created }` with valid secret

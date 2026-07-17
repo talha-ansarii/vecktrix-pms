@@ -73,7 +73,13 @@ Update this file every session, every phase completion, and when prompts change 
 - [x] Duplicate-merge note / basic email idempotency
 - [x] Production checklist doc
 
-## Remaining polish (post-scaffold)
+## Phase 7 — Whiteboard alignment
+
+- [x] WHITEBOARD_WORKFLOW.md + project scoping + QA + payment gate
+- [x] Handoff PM picker + activity audit + proposal UX
+- [x] `npm run test:unit` smoke for pipeline/scope
+- [ ] Stripe/invoicing (optional)
+
 
 - [x] Create-project UI form on clients page
 - [x] Task creation UI on project detail

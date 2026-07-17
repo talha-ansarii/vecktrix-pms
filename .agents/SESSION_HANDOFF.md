@@ -1,25 +1,28 @@
 # Session handoff
 
-## Latest: PRD acceptance remediation (complete)
+## Latest: Whiteboard workflow (Phase 7 — complete)
 
 ### PMS (`Vecktrix-PMS`)
-- **RBAC:** Client role trimmed in seed; `assertAgencyAccess` on agency actions; permission-based nav/UI caps.
-- **Portal:** `linkClientPortalUser` on invite accept + Google provision; `client` in invite roles; **Invite to portal** on Clients.
-- **Delivery:** Sequential task rules in `transitionTask`/`approveTask`; milestone validation; auto-complete after client approval; PM override + payment UI; project members UI; task comments/reviews in panel.
-- **Sales:** Lead filters, create, detail + activity log (`/leads/[id]`).
-- **Email:** Msg91 via `src/lib/email/` (invites, milestone review, optional `SALES_NOTIFY_EMAIL`).
-- **Notifications:** `lib/notifications/events.ts` wired to intake, tasks, milestones.
-- **Rate limits:** Intake + email-intake APIs; CMS proxy has its own limiter.
-- **E2E:** Playwright `e2e/smoke.spec.ts`, `npm run test:e2e`.
-- **Docs:** `.agents/PRD_ACCEPTANCE.md`, `.env.example`, checklist updates.
+- **Spec:** `.agents/WHITEBOARD_WORKFLOW.md` — canonical entities, roles, lifecycle.
+- **Lead → client → project:** Convert client-only; handoff wizard; draft + publish gate; proposal sent/rejected logging.
+- **Delivery:** Project list scoped by `ProjectMember`; QA sign-off before client review; payment unlocks next milestone; unified **Project activity** feed.
+- **Portal:** Published projects only; plan updates; payment CTA (`NEXT_PUBLIC_BILLING_EMAIL`).
+- **Tests:** `npm run test:unit` (pipeline + scope); Playwright smoke unchanged.
 
-### CMS (`Vecktrix`)
-- `POST /api/pms-lead-intake` → PMS intake with server-only secret.
-- Contact form calls PMS intake first, then EmailJS/Sheets.
+### Post-deploy smoke (whiteboard)
+1. Lead in **qualified** → upload proposal file → stage **proposal** + timeline `proposal_sent`.
+2. **Proposal rejected** → **lost** on lead.
+3. Convert → client → handoff wizard (PM + files) → publish with client-visible file.
+4. PM: internal complete → QA sign-off → client review → mark **paid** → next milestone unlocks.
+5. Designer/PE only see assigned projects in sidebar.
 
-### Deploy env (add)
-- PMS: `MSG91_AUTH_KEY`, `MSG91_FROM_EMAIL`, optional `SALES_NOTIFY_EMAIL`
+### Prior: PRD acceptance remediation
+- RBAC, portal invite, Msg91, notifications, intake rate limits — see git history / `PRD_ACCEPTANCE.md`.
+
+### Deploy env
+- PMS: `MSG91_*`, `BLOB_READ_WRITE_TOKEN`, optional `NEXT_PUBLIC_BILLING_EMAIL`
 - CMS: `PMS_INTAKE_URL`, `LEAD_INTAKE_SECRET`
 
 ### Post-deploy
-- Run `npm run db:seed` on production once to refresh client role permissions.
+- `npm run db:push` after schema changes (e.g. `ProjectActivity`, `qaSignedOffAt`).
+- Re-seed only if RBAC permissions change.

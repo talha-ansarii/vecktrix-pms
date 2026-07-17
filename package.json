@@ -12,6 +12,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "test:e2e": "playwright test",
+    "test:unit": "node --import tsx --test src/lib/leads/pipeline.test.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

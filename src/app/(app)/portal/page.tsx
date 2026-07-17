@@ -66,6 +66,20 @@ export default async function PortalPage() {
                       <div>
                         <p className="text-xs text-text-darkSecondary">Milestone {milestone.sortOrder}</p>
                         <h3 className="text-white font-medium text-lg">{milestone.title}</h3>
+                        {milestone.paymentStatus && (
+                          <p className="text-xs text-text-darkSecondary mt-1">
+                            Payment:{" "}
+                            <span
+                              className={
+                                milestone.paymentStatus === "paid"
+                                  ? "text-emerald-400"
+                                  : "text-amber-300/90"
+                              }
+                            >
+                              {formatStatus(milestone.paymentStatus)}
+                            </span>
+                          </p>
+                        )}
                       </div>
                       <StatusBadge status={milestone.status} />
                     </div>

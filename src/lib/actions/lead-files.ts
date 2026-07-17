@@ -44,7 +44,24 @@ export async function uploadLeadFile(formData: FormData) {
     },
   });
 
-  const lead = await prisma.lead.findFirstOrThrow({ where: { id: leadId } });
+  let lead = await prisma.lead.findFirstOrThrow({ where: { id: leadId } });
+
+  if (lead.status === LeadStatus.qualified) {
+    lead = await prisma.lead.update({
+      where: { id: leadId },
+      data: { status: LeadStatus.proposal },
+    });
+    await prisma.leadActivity.create({
+      data: {
+        leadId,
+        userId: ctx.userId,
+        type: "status",
+        content: "Moved to proposal after sharing documents.",
+        pipelineStatus: LeadStatus.proposal,
+      },
+    });
+  }
+
   const activityType =
     lead.status === LeadStatus.proposal ? "proposal_sent" : "file_upload";
   const activityContent =
