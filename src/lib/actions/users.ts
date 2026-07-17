@@ -9,6 +9,7 @@ import { assertPermission } from "@/lib/rbac";
 import { sendEmail, inviteEmailHtml } from "@/lib/email/send";
 import { linkClientPortalUser } from "@/lib/auth/client-link";
 import { getInviteAcceptUrl } from "@/lib/invites";
+import { isWorkspaceInviteRole } from "@/lib/team/invite-roles";
 
 const inviteSchema = z.object({
   email: z.string().email(),
@@ -31,22 +32,59 @@ export async function listPendingInvites() {
   const ctx = await assertPermission("user:invite");
 
   return prisma.invite.findMany({
-    where: { workspaceId: ctx.workspaceId, status: "pending" },
+    where: {
+      workspaceId: ctx.workspaceId,
+      status: "pending",
+      role: { in: ["agency_admin", "sales", "project_manager", "client"] },
+    },
     include: { invitedBy: { select: { name: true, email: true } } },
     orderBy: { createdAt: "desc" },
   });
+}
+
+/** Revoke pending invites that used delivery roles at workspace level (v1 leftover). */
+export async function pruneInvalidWorkspaceInvites() {
+  const ctx = await assertPermission("user:invite");
+
+  const result = await prisma.invite.updateMany({
+    where: {
+      workspaceId: ctx.workspaceId,
+      status: "pending",
+      role: { in: ["ux_designer", "product_engineer", "qa_engineer"] },
+    },
+    data: { status: "revoked" },
+  });
+
+  if (result.count > 0) revalidatePath("/settings/team");
+  return result.count;
 }
 
 export async function inviteUser(data: z.infer<typeof inviteSchema>) {
   const ctx = await assertPermission("user:invite");
   const parsed = inviteSchema.parse(data);
 
+  if (!isWorkspaceInviteRole(parsed.role) && parsed.role !== WorkspaceRole.client) {
+    throw new Error("Use project team panel to invite designers, engineers, and QA.");
+  }
+
+  const email = parsed.email.trim().toLowerCase();
+
+  // One pending workspace invite per email — supersede older links.
+  await prisma.invite.updateMany({
+    where: {
+      workspaceId: ctx.workspaceId,
+      email,
+      status: "pending",
+    },
+    data: { status: "revoked" },
+  });
+
   const token = randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
   const invite = await prisma.invite.create({
     data: {
-      email: parsed.email.trim().toLowerCase(),
+      email,
       workspaceId: ctx.workspaceId,
       role: parsed.role,
       token,

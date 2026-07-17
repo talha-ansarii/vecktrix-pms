@@ -4,8 +4,7 @@ import { useState, useTransition } from "react";
 import { inviteUser } from "@/lib/actions/users";
 import { WorkspaceRole } from "@prisma/client";
 import { InviteLinkCopy } from "./InviteLinkCopy";
-
-const ROLES = Object.values(WorkspaceRole);
+import { WORKSPACE_INVITE_ROLES, formatWorkspaceRole } from "@/lib/team/invite-roles";
 
 export function InviteForm() {
   const [pending, startTransition] = useTransition();
@@ -44,10 +43,10 @@ export function InviteForm() {
     >
       <div className="flex gap-2 flex-wrap">
         <input name="email" type="email" required placeholder="email@company.com" className="input-dark text-sm py-2" />
-        <select name="role" className="input-dark text-sm py-2 w-auto" defaultValue="project_manager">
-          {ROLES.map((r) => (
+        <select name="role" className="input-dark text-sm py-2 w-auto" defaultValue={WorkspaceRole.project_manager}>
+          {WORKSPACE_INVITE_ROLES.map((r) => (
             <option key={r} value={r}>
-              {r.replace(/_/g, " ")}
+              {formatWorkspaceRole(r)}
             </option>
           ))}
         </select>
@@ -55,6 +54,9 @@ export function InviteForm() {
           {pending ? "Sending…" : "Invite"}
         </button>
       </div>
+      <p className="text-xs text-text-darkSecondary max-w-md">
+        Designer, engineer, and QA roles are assigned per project — use the project team panel, not workspace invites.
+      </p>
       {error && <p className="text-sm text-red-400">{error}</p>}
       {success && <p className="text-sm text-emerald-400">{success}</p>}
       {lastInviteUrl && <InviteLinkCopy url={lastInviteUrl} />}

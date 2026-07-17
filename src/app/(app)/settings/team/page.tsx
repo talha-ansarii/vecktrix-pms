@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { PageHeader, EmptyState, ForbiddenState } from "@/components/ui";
-import { listTeamMembers, listPendingInvites } from "@/lib/actions/users";
+import { listTeamMembers, listPendingInvites, pruneInvalidWorkspaceInvites } from "@/lib/actions/users";
 import { formatDate, formatStatus } from "@/lib/utils";
 import {
   getSessionWithPermissions,
@@ -9,7 +9,9 @@ import {
 } from "@/lib/rbac";
 import { InviteForm } from "./InviteForm";
 import { InviteLinkCopy } from "./InviteLinkCopy";
+import { RevokeInviteButton } from "./RevokeInviteButton";
 import { getInviteAcceptUrl } from "@/lib/invites";
+import { formatWorkspaceRole } from "@/lib/team/invite-roles";
 
 export default async function TeamSettingsPage() {
   const access = await tryAssertAnyPermission(["user:invite", "user:manage"]);
@@ -25,6 +27,8 @@ export default async function TeamSettingsPage() {
   const canInvite = roleHasPermission(permissions, "user:invite", workspaceRole);
   const canManage = roleHasPermission(permissions, "user:manage", workspaceRole);
 
+  if (canInvite) await pruneInvalidWorkspaceInvites();
+
   const [members, invites] = await Promise.all([
     canManage ? listTeamMembers() : Promise.resolve([]),
     canInvite ? listPendingInvites() : Promise.resolve([]),
@@ -35,7 +39,7 @@ export default async function TeamSettingsPage() {
       <PageHeader
         overline="Settings"
         title="Team"
-        description="Manage workspace members and invites"
+        description="Invite agency staff (admin, sales, PM). Delivery roles are set per project."
         action={canInvite ? <InviteForm /> : undefined}
       />
 
@@ -75,9 +79,10 @@ export default async function TeamSettingsPage() {
                     <div className="min-w-0">
                       <p className="text-white">{inv.email}</p>
                       <p className="text-xs text-text-darkSecondary">
-                        {formatStatus(inv.role)} · expires {formatDate(inv.expiresAt)}
+                        {formatWorkspaceRole(inv.role)} · expires {formatDate(inv.expiresAt)}
                       </p>
                     </div>
+                    <RevokeInviteButton inviteId={inv.id} />
                   </div>
                   <InviteLinkCopy url={getInviteAcceptUrl(inv.token)} />
                 </li>
