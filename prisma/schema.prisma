@@ -309,12 +309,13 @@ model Lead {
 }
 
 model LeadActivity {
-  id        String   @id @default(cuid())
-  leadId    String
-  userId    String?
-  type      String
-  content   String   @db.Text
-  createdAt DateTime @default(now())
+  id             String      @id @default(cuid())
+  leadId         String
+  userId         String?
+  type           String
+  content        String      @db.Text
+  pipelineStatus LeadStatus?
+  createdAt      DateTime    @default(now())
 
   lead Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
   user User? @relation(fields: [userId], references: [id])

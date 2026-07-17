@@ -1,19 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
-import { PageHeader, StatusBadge, ForbiddenState } from "@/components/ui";
-import {
-  getLead,
-  listLeadAssigneeOptions,
-} from "@/lib/actions/leads";
+import { ForbiddenState } from "@/components/ui";
+import { getLead, listLeadAssigneeOptions } from "@/lib/actions/leads";
 import { getSessionWithPermissions, roleHasPermission, tryAssertPermission } from "@/lib/rbac";
-import { formatDate } from "@/lib/utils";
 import { ConvertLeadButton } from "../ConvertLeadButton";
 import { LeadEditButton } from "../LeadEditButton";
-import { formatMoneyBucket, formatTimelineBucket } from "@/lib/leads/buckets";
-import { LeadDetailForm } from "./LeadDetailForm";
-import { LeadActivityForm } from "./LeadActivityForm";
+import { LeadStatusSelect } from "../LeadStatusSelect";
+import { LeadPipelineBar } from "./LeadPipelineBar";
+import { LeadConversationTimeline } from "./LeadConversationTimeline";
+import { LeadTalkForm } from "./LeadTalkForm";
+import { LeadSummaryCard } from "./LeadSummaryCard";
 import { LeadFilesPanel } from "./LeadFilesPanel";
+import { LeadDetailForm } from "./LeadDetailForm";
 
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const access = await tryAssertPermission("lead:read");
@@ -32,99 +31,76 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const [lead, assignees] = await Promise.all([
     getLead(id).catch(() => null),
-    listLeadAssigneeOptions(),
+    canWrite ? listLeadAssigneeOptions() : Promise.resolve([]),
   ]);
   if (!lead) notFound();
 
   const showConvert =
     canConvert && ["qualified", "proposal"].includes(lead.status) && !lead.convertedClientId;
 
+  const timelineItems = lead.activities.map((a) => ({
+    id: a.id,
+    type: a.type,
+    content: a.content,
+    pipelineStatus: a.pipelineStatus,
+    createdAt: a.createdAt.toISOString(),
+    user: a.user,
+  }));
+
   return (
     <AppShell currentPath="/leads">
-      <PageHeader
-        overline="Lead"
-        title={lead.name}
-        description={lead.email}
-        action={
-          <div className="flex flex-wrap gap-2 justify-end">
-            {canWrite && <LeadEditButton leadId={lead.id} />}
-            {showConvert ? (
-              <ConvertLeadButton leadId={lead.id} />
-            ) : lead.convertedClient ? (
-              <Link href={`/clients?highlight=${lead.convertedClient.id}`} className="btn-secondary-dark text-sm py-2 px-4">
-                View client →
-              </Link>
-            ) : null}
-          </div>
-        }
-      />
-
-      <div className="flex flex-wrap gap-2 mb-6">
-        <StatusBadge status={lead.status} />
-        <StatusBadge status={lead.temperature} />
-        {lead.moneyBucket && <StatusBadge status={lead.moneyBucket} />}
-        {lead.timelineBucket && <StatusBadge status={lead.timelineBucket} />}
-        {lead.serviceInterest && <StatusBadge status={lead.serviceInterest} />}
+      <div className="mb-6">
+        <Link href="/leads" className="text-sm text-text-darkSecondary hover:text-white">
+          ← All leads
+        </Link>
       </div>
 
-      <p className="text-sm text-text-darkSecondary mb-6">
-        Source: {lead.source} · Created {formatDate(lead.createdAt)}
-        {lead.assignedTo && (
-          <>
-            {" "}
-            · Owner: {lead.assignedTo.name ?? lead.assignedTo.email}
-          </>
-        )}
-        {(lead.moneyBucket || lead.timelineBucket) && (
-          <>
-            <br />
-            {lead.moneyBucket && <>Budget: {formatMoneyBucket(lead.moneyBucket)}</>}
-            {lead.moneyBucket && lead.timelineBucket && " · "}
-            {lead.timelineBucket && <>Timeline: {formatTimelineBucket(lead.timelineBucket)}</>}
-          </>
-        )}
-      </p>
-
-      {lead.convertedClient && (
-        <div className="card-dark mb-6 border-emerald-500/20 bg-emerald-500/5 p-4">
-          <p className="text-sm text-emerald-300">
-            Converted to client{" "}
-            <Link href={`/clients?highlight=${lead.convertedClient.id}`} className="underline font-medium">
-              {lead.convertedClient.name}
-            </Link>
-            . Create a project from the Clients page and send a portal invite when ready.
-          </p>
+      <header className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 mb-8">
+        <div className="min-w-0">
+          <p className="overline-text text-text-darkSecondary mb-2">Lead workspace</p>
+          <h1 className="heading-section text-white text-3xl sm:text-4xl lg:text-5xl">{lead.name}</h1>
+          {lead.company && (
+            <p className="body-text text-text-darkSecondary mt-2">{lead.company}</p>
+          )}
+          {canWrite && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <span className="text-xs text-text-darkSecondary">Stage</span>
+              <LeadStatusSelect leadId={lead.id} status={lead.status} className="input-dark text-sm py-2 max-w-[11rem]" />
+            </div>
+          )}
         </div>
-      )}
+        <div className="flex flex-wrap gap-2 shrink-0">
+          {canWrite && <LeadEditButton leadId={lead.id} />}
+          {showConvert && <ConvertLeadButton leadId={lead.id} />}
+        </div>
+      </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="card-dark p-5 sm:p-6">
-          <LeadDetailForm lead={lead} assignees={assignees} canWrite={canWrite} />
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-6 items-start">
+        <div className="space-y-6 min-w-0">
+          <LeadPipelineBar currentStatus={lead.status} />
+          {canWrite && <LeadTalkForm leadId={lead.id} stage={lead.status} />}
+          <div>
+            <h2 className="font-sans text-lg font-semibold text-white mb-4">Conversation & history</h2>
+            <LeadConversationTimeline activities={timelineItems} currentStatus={lead.status} />
+          </div>
         </div>
 
-        <div className="space-y-6">
+        <aside className="space-y-6 xl:max-w-[300px]">
+          <LeadSummaryCard lead={lead} />
           <LeadFilesPanel leadId={lead.id} files={lead.files} canManage={canWrite} />
-
-          <div className="card-dark p-5 sm:p-6">
-            <h2 className="font-sans text-lg font-semibold text-white mb-4">Activity</h2>
-            {canWrite && <LeadActivityForm leadId={lead.id} />}
-            <ul className="mt-4 space-y-3">
-              {lead.activities.map((a) => (
-                <li key={a.id} className="border-b border-white/6 pb-3 text-sm last:border-0">
-                  <p className="text-white">{a.content}</p>
-                  <p className="text-xs text-text-darkSecondary mt-1">
-                    {a.user?.name ?? a.user?.email ?? "System"} · {formatDate(a.createdAt)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
+          {canWrite && (
+            <details className="card-dark p-4 sm:p-5 group">
+              <summary className="cursor-pointer text-sm font-semibold text-white list-none flex justify-between items-center">
+                Edit all fields
+                <span className="text-text-darkSecondary group-open:rotate-180 transition-transform">▼</span>
+              </summary>
+              <div className="mt-4 pt-4 border-t border-white/6">
+                <LeadDetailForm lead={lead} assignees={assignees} canWrite />
+              </div>
+            </details>
+          )}
+        </aside>
       </div>
-
-      <Link href="/leads" className="inline-block mt-8 text-sm text-text-darkSecondary hover:text-white">
-        ← Back to leads
-      </Link>
     </AppShell>
   );
 }

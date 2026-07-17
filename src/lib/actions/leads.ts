@@ -127,7 +127,8 @@ export async function createLead(data: z.infer<typeof createLeadSchema>) {
       leadId: lead.id,
       userId: ctx.userId,
       type: "created",
-      content: "Lead created",
+      content: "Lead entered the pipeline.",
+      pipelineStatus: LeadStatus.new,
     },
   });
 
@@ -139,19 +140,36 @@ export async function updateLead(data: z.infer<typeof updateLeadSchema>) {
   const ctx = await assertAgencyAccess("lead:write");
   const { id, ...rest } = updateLeadSchema.parse(data);
 
+  const before = await prisma.lead.findFirstOrThrow({
+    where: { id, workspaceId: ctx.workspaceId },
+  });
+
   const lead = await prisma.lead.update({
     where: { id, workspaceId: ctx.workspaceId },
     data: rest,
   });
 
-  await prisma.leadActivity.create({
-    data: {
-      leadId: lead.id,
-      userId: ctx.userId,
-      type: "updated",
-      content: `Lead updated: ${Object.keys(rest).join(", ")}`,
-    },
-  });
+  if (rest.status && rest.status !== before.status) {
+    await prisma.leadActivity.create({
+      data: {
+        leadId: lead.id,
+        userId: ctx.userId,
+        type: "status",
+        content: `Stage updated to ${rest.status.replace(/_/g, " ")}.`,
+        pipelineStatus: rest.status,
+      },
+    });
+  } else {
+    await prisma.leadActivity.create({
+      data: {
+        leadId: lead.id,
+        userId: ctx.userId,
+        type: "updated",
+        content: `Lead details updated (${Object.keys(rest).join(", ")}).`,
+        pipelineStatus: lead.status,
+      },
+    });
+  }
 
   revalidatePath("/leads");
   revalidatePath(`/leads/${lead.id}`);
@@ -171,7 +189,8 @@ export async function updateLeadStatus(leadId: string, status: LeadStatus) {
       leadId: lead.id,
       userId: ctx.userId,
       type: "status",
-      content: `Status changed to ${status.replace(/_/g, " ")}`,
+      content: `Stage updated to ${status.replace(/_/g, " ")}.`,
+      pipelineStatus: status,
     },
   });
 
@@ -217,7 +236,8 @@ export async function convertLeadToClient(leadId: string) {
         leadId,
         userId: ctx.userId,
         type: "converted",
-        content: `Converted to client: ${client.name}. Invite them to the portal from the Clients page.`,
+        content: `Converted to client ${client.name}. Next: create a project and send a portal invite.`,
+        pipelineStatus: LeadStatus.won,
       },
     });
 
@@ -233,12 +253,17 @@ export async function convertLeadToClient(leadId: string) {
 export async function addLeadActivity(leadId: string, content: string) {
   const ctx = await assertAgencyAccess("lead:write");
 
+  const lead = await prisma.lead.findFirstOrThrow({
+    where: { id: leadId, workspaceId: ctx.workspaceId },
+  });
+
   const activity = await prisma.leadActivity.create({
     data: {
       leadId,
       userId: ctx.userId,
       type: "note",
       content,
+      pipelineStatus: lead.status,
     },
   });
 

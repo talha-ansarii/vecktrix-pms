@@ -13,6 +13,16 @@ export function formatDate(date: Date | string) {
   }).format(new Date(date));
 }
 
+export function formatDateTime(date: Date | string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(date));
+}
+
 export function formatStatus(status: string) {
   return status.replace(/_/g, " ");
 }

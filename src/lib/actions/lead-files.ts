@@ -43,6 +43,17 @@ export async function uploadLeadFile(formData: FormData) {
     },
   });
 
+  const lead = await prisma.lead.findFirstOrThrow({ where: { id: leadId } });
+  await prisma.leadActivity.create({
+    data: {
+      leadId,
+      userId: ctx.userId,
+      type: "file_upload",
+      content: `Uploaded document: ${uploaded.name}`,
+      pipelineStatus: lead.status,
+    },
+  });
+
   revalidatePath(`/leads/${leadId}`);
   revalidatePath("/leads");
   return record;
@@ -53,7 +64,7 @@ export async function deleteLeadFile(fileId: string) {
 
   const file = await prisma.leadFile.findFirstOrThrow({
     where: { id: fileId, lead: { workspaceId: ctx.workspaceId } },
-    include: { lead: { select: { id: true } } },
+    include: { lead: { select: { id: true, status: true } } },
   });
 
   try {
@@ -63,6 +74,16 @@ export async function deleteLeadFile(fileId: string) {
   }
 
   await prisma.leadFile.delete({ where: { id: fileId } });
+
+  await prisma.leadActivity.create({
+    data: {
+      leadId: file.lead.id,
+      userId: ctx.userId,
+      type: "file_removed",
+      content: `Removed document: ${file.name}`,
+      pipelineStatus: file.lead.status,
+    },
+  });
 
   revalidatePath(`/leads/${file.lead.id}`);
   revalidatePath("/leads");
