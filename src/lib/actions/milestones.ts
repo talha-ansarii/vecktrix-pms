@@ -2,11 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { MilestoneStatus, TaskStatus } from "@prisma/client";
+import { MilestoneStatus, TaskStatus, WorkspaceRole, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { assertAgencyAccess, assertPermission, getSessionContext } from "@/lib/rbac";
 import { sendEmail, milestoneReviewEmailHtml } from "@/lib/email/send";
 import { notifyWorkspaceRole } from "@/lib/notifications/events";
+import { appendProjectPlanLog } from "@/lib/project-plan";
 
 const transitionSchema = z.object({
   milestoneId: z.string(),
@@ -200,5 +201,73 @@ export async function updatePaymentStatus(milestoneId: string, paymentStatus: st
   });
 
   revalidatePath(`/projects/${milestone.projectId}`);
+  return updated;
+}
+
+const planUpdateSchema = z.object({
+  milestoneId: z.string(),
+  title: z.string().min(1).optional(),
+  sortOrder: z.number().int().positive().optional(),
+  ownerRole: z.nativeEnum(WorkspaceRole).optional(),
+  description: z.string().optional(),
+});
+
+export async function updateMilestonePlan(data: z.infer<typeof planUpdateSchema>) {
+  const ctx = await assertAgencyAccess("milestone:write");
+  const parsed = planUpdateSchema.parse(data);
+
+  const milestone = await prisma.milestone.findFirstOrThrow({
+    where: { id: parsed.milestoneId, project: { workspaceId: ctx.workspaceId } },
+    include: { project: { select: { id: true, publishedToClient: true, publishedAt: true } } },
+  });
+
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
+  if (parsed.title !== undefined && parsed.title !== milestone.title) {
+    changes.title = { from: milestone.title, to: parsed.title };
+  }
+  if (parsed.sortOrder !== undefined && parsed.sortOrder !== milestone.sortOrder) {
+    changes.sortOrder = { from: milestone.sortOrder, to: parsed.sortOrder };
+  }
+  if (parsed.ownerRole !== undefined && parsed.ownerRole !== milestone.ownerRole) {
+    changes.ownerRole = { from: milestone.ownerRole, to: parsed.ownerRole };
+  }
+  if (parsed.description !== undefined && parsed.description !== milestone.description) {
+    changes.description = { from: milestone.description, to: parsed.description };
+  }
+
+  if (Object.keys(changes).length === 0) {
+    return milestone;
+  }
+
+  const updated = await prisma.milestone.update({
+    where: { id: parsed.milestoneId },
+    data: {
+      title: parsed.title,
+      sortOrder: parsed.sortOrder,
+      ownerRole: parsed.ownerRole,
+      description: parsed.description,
+    },
+  });
+
+  const shouldLog =
+    milestone.project.publishedToClient || milestone.project.publishedAt != null;
+  if (shouldLog) {
+    const parts: string[] = [];
+    if (changes.title) parts.push(`renamed to "${parsed.title}"`);
+    if (changes.sortOrder) parts.push(`moved to position ${parsed.sortOrder}`);
+    if (changes.ownerRole) parts.push(`owner set to ${parsed.ownerRole}`);
+    if (changes.description) parts.push("description updated");
+
+    await appendProjectPlanLog(milestone.project.id, {
+      actorUserId: ctx.userId,
+      type: "milestone_plan_updated",
+      summary: `Milestone "${milestone.title}" plan updated: ${parts.join("; ")}.`,
+      metadata: { milestoneId: milestone.id, changes } as Prisma.InputJsonValue,
+      clientVisible: true,
+    });
+  }
+
+  revalidatePath(`/projects/${milestone.project.id}`);
+  revalidatePath("/portal");
   return updated;
 }

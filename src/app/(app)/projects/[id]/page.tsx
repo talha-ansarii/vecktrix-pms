@@ -1,13 +1,15 @@
 import { AppShell } from "@/components/AppShell";
 import { PageHeader, StatusBadge, ForbiddenState } from "@/components/ui";
-import { getProject, listAssignableMembers } from "@/lib/actions/projects";
+import { getProject, listAssignableMembers, getProjectPublishEligibility } from "@/lib/actions/projects";
 import { getSessionWithPermissions, roleHasPermission, tryAssertPermission } from "@/lib/rbac";
-import { formatStatus } from "@/lib/utils";
+import { formatStatus, formatDate } from "@/lib/utils";
 import { notFound } from "next/navigation";
 import { MilestoneActions } from "./MilestoneActions";
 import { MilestoneTaskPanel } from "./MilestoneTaskPanel";
 import { ProjectFilesPanel } from "./ProjectFilesPanel";
 import { ProjectMembersPanel } from "./ProjectMembersPanel";
+import { ProjectPublishBar } from "./ProjectPublishBar";
+import { MilestonePlanEditor } from "./MilestonePlanEditor";
 
 export default async function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -20,10 +22,11 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
     );
   }
 
-  const [project, assignable, session] = await Promise.all([
+  const [project, assignable, session, publishState] = await Promise.all([
     getProject(id).catch(() => null),
     listAssignableMembers().catch(() => []),
     getSessionWithPermissions(),
+    getProjectPublishEligibility(id).catch(() => null),
   ]);
   if (!project) notFound();
 
@@ -46,18 +49,31 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         action={<StatusBadge status={project.status} />}
       />
 
+      {publishState && (
+        <ProjectPublishBar
+          projectId={project.id}
+          publishedToClient={project.publishedToClient}
+          publishedAt={project.publishedAt}
+          unpublishedAt={project.unpublishedAt}
+          canPublish={publishState.canPublish}
+          clientVisibleFileCount={publishState.clientVisibleFileCount}
+        />
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-4">
           <h2 className="overline-text text-text-darkSecondary">Milestones</h2>
           {project.milestones.map((milestone) => (
             <div key={milestone.id} className="card-dark">
               <div className="flex items-start justify-between gap-4 mb-3">
-                <div>
-                  <p className="text-xs text-text-darkSecondary mb-1">#{milestone.sortOrder}</p>
-                  <h3 className="text-white font-medium text-lg">{milestone.title}</h3>
-                  <p className="text-xs text-text-darkSecondary mt-1">
-                    Owner: {formatStatus(milestone.ownerRole)}
-                  </p>
+                <div className="flex-1">
+                  <MilestonePlanEditor
+                    milestoneId={milestone.id}
+                    title={milestone.title}
+                    sortOrder={milestone.sortOrder}
+                    ownerRole={milestone.ownerRole}
+                    canEdit={caps.canManageMilestones}
+                  />
                 </div>
                 <StatusBadge status={milestone.status} />
               </div>
@@ -128,6 +144,14 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <h3 className="overline-text text-text-darkSecondary mb-2">Client</h3>
             <p className="text-white">{project.client.name}</p>
             <p className="text-sm text-text-darkSecondary">{project.client.email}</p>
+            {project.sourceLeadId && (
+              <a
+                href={`/leads/${project.sourceLeadId}`}
+                className="text-xs text-emerald-400/90 hover:underline mt-2 inline-block"
+              >
+                View source lead
+              </a>
+            )}
           </div>
 
           <ProjectFilesPanel
@@ -144,6 +168,35 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
               milestone: f.milestone,
             }))}
           />
+
+          <div className="card-dark">
+            <h3 className="overline-text text-text-darkSecondary mb-3">Plan activity</h3>
+            {project.planLogs.length === 0 && project.planClientNotes.length === 0 ? (
+              <p className="text-sm text-text-darkSecondary">No plan updates yet.</p>
+            ) : (
+              <ul className="space-y-3 max-h-80 overflow-y-auto">
+                {project.planLogs.map((log) => (
+                  <li key={log.id} className="text-sm border-b border-white/6 pb-2">
+                    <p className="text-white">{log.summary}</p>
+                    <p className="text-xs text-text-darkSecondary mt-1">
+                      {formatDate(log.createdAt)}
+                      {log.actor && ` · ${log.actor.name ?? log.actor.email}`}
+                      {!log.clientVisible && " · internal"}
+                    </p>
+                  </li>
+                ))}
+                {project.planClientNotes.map((note) => (
+                  <li key={note.id} className="text-sm border-b border-white/6 pb-2">
+                    <p className="text-amber-200/90">Client note</p>
+                    <p className="text-text-darkSecondary">{note.content}</p>
+                    <p className="text-xs text-text-darkSecondary mt-1">
+                      {formatDate(note.createdAt)} · {note.user.name ?? note.user.email}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
     </AppShell>

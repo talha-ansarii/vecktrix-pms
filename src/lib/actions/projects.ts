@@ -2,10 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { WorkspaceRole, ProjectStatus } from "@prisma/client";
+import { WorkspaceRole, ProjectStatus, MilestoneStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { assertAgencyAccess } from "@/lib/rbac";
 import { DEFAULT_MILESTONES } from "@/lib/services/milestones";
+import { appendProjectPlanLog } from "@/lib/project-plan";
+import { notifyUser } from "@/lib/notifications/events";
 
 const createProjectSchema = z.object({
   clientId: z.string(),
@@ -64,6 +66,16 @@ export async function getProject(id: string) {
           milestone: { select: { id: true, title: true } },
         },
       },
+      planLogs: {
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: { actor: { select: { name: true, email: true } } },
+      },
+      planClientNotes: {
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: { user: { select: { name: true, email: true } } },
+      },
     },
   });
 }
@@ -92,7 +104,7 @@ export async function createProject(data: z.infer<typeof createProjectSchema>) {
           title: m.title,
           sortOrder: m.sortOrder,
           ownerRole: m.ownerRole,
-          status: m.sortOrder === 1 ? "active" : "locked",
+          status: MilestoneStatus.locked,
         },
       });
     }
@@ -158,4 +170,121 @@ export async function updateProjectStatus(projectId: string, status: ProjectStat
 
   revalidatePath(`/projects/${projectId}`);
   return project;
+}
+
+export async function getProjectPublishEligibility(projectId: string) {
+  const ctx = await assertAgencyAccess("project:read");
+  const project = await prisma.project.findFirstOrThrow({
+    where: { id: projectId, workspaceId: ctx.workspaceId },
+    select: {
+      publishedToClient: true,
+      publishedAt: true,
+      unpublishedAt: true,
+      _count: { select: { milestones: true } },
+    },
+  });
+  const clientVisibleFiles = await prisma.projectFile.count({
+    where: { projectId, clientVisible: true },
+  });
+  return {
+    ...project,
+    clientVisibleFileCount: clientVisibleFiles,
+    canPublish:
+      !project.publishedToClient &&
+      project._count.milestones >= 1 &&
+      clientVisibleFiles >= 1,
+  };
+}
+
+export async function publishProjectToClient(projectId: string) {
+  const ctx = await assertAgencyAccess("project:write");
+
+  const project = await prisma.project.findFirstOrThrow({
+    where: { id: projectId, workspaceId: ctx.workspaceId },
+    include: { client: true },
+  });
+
+  if (project.publishedToClient) {
+    throw new Error("Project is already published to the client portal");
+  }
+
+  const milestoneCount = await prisma.milestone.count({ where: { projectId } });
+  if (milestoneCount < 1) {
+    throw new Error("Add at least one milestone before publishing");
+  }
+
+  const clientVisibleFiles = await prisma.projectFile.count({
+    where: { projectId, clientVisible: true },
+  });
+  if (clientVisibleFiles < 1) {
+    throw new Error("Mark at least one project file as visible to the client before publishing");
+  }
+
+  const now = new Date();
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { publishedToClient: true, publishedAt: now, unpublishedAt: null },
+  });
+
+  const firstMilestone = await prisma.milestone.findFirst({
+    where: { projectId, sortOrder: 1 },
+  });
+  if (firstMilestone?.status === MilestoneStatus.locked) {
+    await prisma.milestone.update({
+      where: { id: firstMilestone.id },
+      data: { status: MilestoneStatus.active },
+    });
+  }
+
+  await appendProjectPlanLog(projectId, {
+    actorUserId: ctx.userId,
+    type: "published",
+    summary: "Project plan and shared files are now visible on the client portal.",
+    clientVisible: true,
+  });
+
+  if (project.client.userId) {
+    await notifyUser({
+      userId: project.client.userId,
+      workspaceId: ctx.workspaceId,
+      type: "project",
+      title: "Your project is ready",
+      message: `${project.name} is now available in your portal.`,
+      href: "/portal",
+    });
+  }
+
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/portal");
+  revalidatePath("/clients");
+}
+
+export async function unpublishProjectFromClient(projectId: string) {
+  const ctx = await assertAgencyAccess("project:write");
+
+  const project = await prisma.project.findFirstOrThrow({
+    where: { id: projectId, workspaceId: ctx.workspaceId },
+  });
+
+  if (!project.publishedToClient) {
+    throw new Error("Project is not published");
+  }
+
+  const now = new Date();
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { publishedToClient: false, unpublishedAt: now },
+  });
+
+  await appendProjectPlanLog(projectId, {
+    actorUserId: ctx.userId,
+    type: "unpublished",
+    summary:
+      "This project was hidden from the client portal. Your team can still work on it internally.",
+    clientVisible: true,
+  });
+
+  revalidatePath(`/projects/${projectId}`);
+  revalidatePath("/portal");
+  revalidatePath("/clients");
 }

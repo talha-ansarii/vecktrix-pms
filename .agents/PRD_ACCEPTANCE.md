@@ -8,7 +8,9 @@ Mark items when verified by automated test or documented smoke run.
 |---|------|--------|----------------|
 | 1 | Sales lead board + segregation | Done | `e2e/leads.spec.ts`, `/leads` filters + detail |
 | 2 | Website → PMS leads | Done | CMS `/api/pms-lead-intake` → PMS intake API |
-| 3 | Convert → Client only | Done | `e2e/smoke.spec.ts` |
+| 3 | Convert → Client only | Done | `e2e/smoke.spec.ts`; project via handoff wizard |
+| 3b | Draft project + publish gate | Done | `publishProjectToClient` requires client-visible file; portal filters `publishedToClient` |
+| 3c | Lead file promote + plan log | Done | `project-handoff.ts`, `ProjectPlanLog` / client notes |
 | 4 | Projects + 5 milestones | Done | `createProject` + smoke e2e |
 | 5 | Tasks sequential + PM approval | Done | `tasks.ts` + project UI |
 | 6 | Client portal | Done | Client invite links `Client.userId` |

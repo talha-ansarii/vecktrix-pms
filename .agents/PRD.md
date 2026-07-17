@@ -11,7 +11,7 @@ Agency delivery OS for Vecktrix: ingest and qualify leads, convert to clients, r
 3. Convert qualified leads to Clients (no auto project)
 4. PM runs projects through 5 fixed milestones with role owners
 5. Dynamic sub-tasks with PM approval, sequential unlock, internal reviews
-6. Client portal: ongoing projects, edit profile, milestone progress, milestone review only
+6. Client portal: **published** projects only, shared files, plan updates, plan concern notes, milestone review
 7. Visual identity matches vecktrix.com
 
 ## Personas
@@ -27,7 +27,7 @@ Agency delivery OS for Vecktrix: ingest and qualify leads, convert to clients, r
 ## Core flows
 
 1. Lead ingest (manual Sales / website) → qualify → convert → Client
-2. PM creates Project → seeds 5 milestones → assigns members
+2. PM runs **Create project & share proposals** wizard from client (draft) → publish when plan + client-visible files ready → portal
 3. Role creates tasks → PM approves → work → internal review → approve → next task
 4. Milestone internal complete → PM submits → Client reviews → unlock next
 
@@ -36,6 +36,6 @@ Agency delivery OS for Vecktrix: ingest and qualify leads, convert to clients, r
 - Stripe/full accounting
 - Full marketing CRM automation
 - Sharing CMS database
-- Auto-creating projects on convert
+- Auto-creating projects on convert (use explicit client-card handoff wizard instead)
 - Client task-level review
 - Separate visual theme

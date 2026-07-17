@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { PageHeader, StatusBadge, EmptyState } from "@/components/ui";
 import { listClients } from "@/lib/actions/clients";
 import { formatDate, cn } from "@/lib/utils";
-import { CreateProjectForm } from "./CreateProjectForm";
+import { CreateProjectHandoffWizard } from "./CreateProjectHandoffWizard";
 import { ClientPortalInviteButton } from "./ClientPortalInviteButton";
 import { tryAssertPermission } from "@/lib/rbac";
 import { ForbiddenState } from "@/components/ui";
@@ -51,6 +51,14 @@ export default async function ClientsPage({
               <h3 className="heading-card text-white text-xl mb-1">{client.name}</h3>
               {client.company && <p className="text-text-darkSecondary text-sm mb-3">{client.company}</p>}
               <p className="text-sm text-text-darkSecondary mb-4">{client.email}</p>
+              {client.lead?.id && (
+                <Link
+                  href={`/leads/${client.lead.id}`}
+                  className="text-xs text-emerald-400/90 hover:underline mb-3 inline-block"
+                >
+                  View source lead
+                </Link>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-xs text-text-darkSecondary">
                   {client._count.projects} project{client._count.projects !== 1 ? "s" : ""}
@@ -65,13 +73,22 @@ export default async function ClientsPage({
                       href={`/projects/${p.id}`}
                       className="flex items-center justify-between text-sm hover:text-white text-text-darkSecondary"
                     >
-                      <span>{p.name}</span>
+                      <span>
+                        {p.name}
+                        {!p.publishedToClient && (
+                          <span className="ml-2 text-xs text-amber-400/80">Draft</span>
+                        )}
+                      </span>
                       <StatusBadge status={p.status} />
                     </Link>
                   ))}
                 </div>
               )}
-              <CreateProjectForm clientId={client.id} clientName={client.name} />
+              <CreateProjectHandoffWizard
+                clientId={client.id}
+                clientName={client.name}
+                prominent={client._count.projects === 0}
+              />
               <ClientPortalInviteButton clientId={client.id} hasPortalAccess={Boolean(client.userId)} />
             </div>
           ))}

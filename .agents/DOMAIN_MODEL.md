@@ -38,7 +38,7 @@
 - WorkspaceMember (userId, workspaceId, role)
 - Lead (+ LeadActivity)
 - Client (+ ClientUser link)
-- Project (+ ProjectMember)
+- Project (+ ProjectMember, ProjectFile, ProjectPlanLog, ProjectPlanClientNote)
 - Milestone (+ MilestoneReview)
 - Task (+ TaskReview, TaskComment, TimeEntry)
 - Notification
@@ -46,7 +46,25 @@
 
 ## Convert Lead → Client
 
-Allowed from `qualified` or `proposal`. Creates Client, sets `Lead.convertedClientId`, status `won`. No Project.
+Allowed from `qualified`, `proposal`, or `won` (if not already converted). Creates Client, sets `Lead.convertedClientId`. **Does not create a Project.** Lead timeline and `LeadFile` rows stay on the lead.
+
+## Client → Project handoff
+
+Explicit PM/Sales action from the client card: **Create project & share proposals** wizard (`createDraftProjectFromClient`).
+
+- New projects start **draft** (`publishedToClient = false`).
+- Optional `Project.sourceLeadId`; selected `LeadFile` rows promote to `ProjectFile` (same `url`/`storageKey`, `sourceLeadFileId`, default `clientVisible: true`).
+- Milestones seeded from wizard (default five), all **`locked`** until publish activates milestone 1.
+
+## Publish to client portal
+
+- **Publish** (`publishProjectToClient`): requires ≥1 milestone and ≥1 `ProjectFile` with `clientVisible: true`; sets `publishedToClient`, activates milestone 1 if locked; client-visible `ProjectPlanLog`.
+- **Unpublish** hides project from portal again; client-visible log entry.
+- Portal query returns only `publishedToClient: true` projects.
+
+## Plan changes after publish
+
+Agency may edit milestone plan fields (`updateMilestonePlan`); changes after first publish log to **client-visible** `ProjectPlanLog`. Clients may submit **plan concern** notes (`ProjectPlanClientNote`) — separate from milestone delivery review.
 
 ## Sequential tasks
 

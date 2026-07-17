@@ -158,6 +158,8 @@ model User {
   timeEntries       TimeEntry[]
   notifications     Notification[]
   projectFiles      ProjectFile[]     @relation("FileUploader")
+  projectPlanLogs     ProjectPlanLog[]
+  projectPlanNotes    ProjectPlanClientNote[]
 }
 
 model Account {
@@ -366,16 +368,20 @@ model Client {
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
 model Project {
-  id          String        @id @default(cuid())
-  workspaceId String
-  clientId    String
-  name        String
-  description String?       @db.Text
-  status      ProjectStatus @default(planning)
-  startDate   DateTime?
-  endDate     DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id                String        @id @default(cuid())
+  workspaceId       String
+  clientId          String
+  name              String
+  description       String?       @db.Text
+  status            ProjectStatus @default(planning)
+  publishedToClient Boolean       @default(false)
+  publishedAt       DateTime?
+  unpublishedAt     DateTime?
+  sourceLeadId      String?
+  startDate         DateTime?
+  endDate           DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
   workspace Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   client    Client          @relation(fields: [clientId], references: [id])
@@ -384,6 +390,8 @@ model Project {
   tasks     Task[]
   timeEntries TimeEntry[]
   files     ProjectFile[]
+  planLogs  ProjectPlanLog[]
+  planClientNotes ProjectPlanClientNote[]
 
   @@index([workspaceId])
   @@index([clientId])
@@ -517,17 +525,18 @@ model TimeEntry {
 // ─── Notifications ────────────────────────────────────────────────────────────
 
 model ProjectFile {
-  id            String   @id @default(cuid())
-  projectId     String
-  milestoneId   String?
-  name          String
-  url           String
-  storageKey    String
-  mimeType      String
-  size          Int
-  clientVisible Boolean  @default(false)
-  uploadedById  String
-  createdAt     DateTime @default(now())
+  id               String   @id @default(cuid())
+  projectId        String
+  milestoneId      String?
+  name             String
+  url              String
+  storageKey       String
+  mimeType         String
+  size             Int
+  clientVisible    Boolean  @default(false)
+  sourceLeadFileId String?  @unique
+  uploadedById     String
+  createdAt        DateTime @default(now())
 
   project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   milestone  Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
@@ -535,6 +544,39 @@ model ProjectFile {
 
   @@index([projectId])
   @@index([milestoneId])
+}
+
+model ProjectPlanLog {
+  id            String   @id @default(cuid())
+  projectId     String
+  actorUserId   String?
+  type          String
+  summary       String   @db.Text
+  metadata      Json?
+  clientVisible Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actor   User?   @relation(fields: [actorUserId], references: [id])
+
+  planClientNotes ProjectPlanClientNote[]
+
+  @@index([projectId, createdAt])
+}
+
+model ProjectPlanClientNote {
+  id        String   @id @default(cuid())
+  projectId String
+  userId    String
+  content   String   @db.Text
+  planLogId String?
+  createdAt DateTime @default(now())
+
+  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id])
+  planLog ProjectPlanLog? @relation(fields: [planLogId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
 }
 
 model Notification {

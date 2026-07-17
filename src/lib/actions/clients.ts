@@ -22,7 +22,10 @@ export async function listClients() {
   return prisma.client.findMany({
     where: { workspaceId: ctx.workspaceId },
     include: {
-      projects: { select: { id: true, name: true, status: true } },
+      projects: {
+        select: { id: true, name: true, status: true, publishedToClient: true },
+      },
+      lead: { select: { id: true } },
       _count: { select: { projects: true } },
       user: { select: { id: true } },
     },
@@ -85,6 +88,7 @@ export async function getClientPortalData() {
     where: { userId: ctx.userId, workspaceId: ctx.workspaceId },
     include: {
       projects: {
+        where: { publishedToClient: true },
         include: {
           files: {
             where: { clientVisible: true },
@@ -98,6 +102,11 @@ export async function getClientPortalData() {
                 orderBy: { sortOrder: "asc" },
               },
             },
+          },
+          planLogs: {
+            where: { clientVisible: true },
+            orderBy: { createdAt: "desc" },
+            take: 30,
           },
         },
       },

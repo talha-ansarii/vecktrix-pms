@@ -1,4 +1,4 @@
-import { WorkspaceRole } from "@prisma/client";
+import { WorkspaceRole, MilestoneStatus } from "@prisma/client";
 
 export const DEFAULT_MILESTONES: { title: string; ownerRole: WorkspaceRole; sortOrder: number }[] = [
   { title: "Requirements gathering", ownerRole: WorkspaceRole.project_manager, sortOrder: 1 },
@@ -16,7 +16,7 @@ export async function seedProjectMilestones(projectId: string, tx: { milestone: 
         title: m.title,
         sortOrder: m.sortOrder,
         ownerRole: m.ownerRole,
-        status: m.sortOrder === 1 ? "active" : "locked",
+        status: MilestoneStatus.locked,
       },
     });
   }
